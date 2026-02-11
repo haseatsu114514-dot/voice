@@ -1,0 +1,28 @@
+[app]
+# ホットキー: 録音開始/停止
+hotkey = "<ctrl>+<alt>+space"
+
+# 16kHz/mono が Whisper で扱いやすい
+sample_rate = 16000
+input_device = ""
+
+# Whisper 設定
+language = "ja"
+model_name = "large-v3"
+model_device = "auto"
+compute_type = "int8_float16"
+beam_size = 5
+vad_filter = true
+initial_prompt = ""
+
+# true: 文字起こし後に貼り付けまで実行 / false: クリップボードにコピーのみ
+paste_after_transcribe = true
+
+[normalization]
+remove_fillers = true
+fillers = ["えーと", "えっと", "あの", "その", "うーん", "えー"]
+
+[normalization.replacements]
+"えーあい" = "AI"
+"きょうとう" = "京都"
+"おーぷんえーあい" = "OpenAI"
