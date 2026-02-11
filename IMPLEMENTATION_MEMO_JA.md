@@ -2,88 +2,80 @@
 
 このメモは「どう作ったか」を、なるべくやさしく書いたものです。
 
-## 1. 目標を決める
+## 今回追加した機能
 
-今回は次の4機能をゴールにしました。
-- 精度を上げる（Whisper系モデルを使う）
-- キー1つで録音開始/停止
-- 言い間違いを自動で直す
-- フィラーを自動で消す
+1. 無音で自動停止
+2. 学習（修正内容を辞書に反映）
+3. macメニューバー常駐 + ログイン起動
+4. 設定GUI
 
-## 2. 技術の選定
+## 1. 無音で自動停止
 
-- 音声認識: `faster-whisper`
-- 録音: `sounddevice`
-- グローバルホットキー: `pynput`
-- 貼り付け: `pyperclip` + キーボード操作
-- 設定: `config.toml`
-- 共通の言い間違い辞書: `common_replacements_ja.toml`
+やったこと:
+- 録音中に音量(RMS)を毎回計測
+- 一定時間、音量がしきい値より低ければ自動停止
 
-理由: Pythonで組みやすく、試行錯誤しやすいからです。
+使う設定:
+- `auto_stop_silence_enabled`
+- `auto_stop_silence_sec`
+- `auto_stop_min_record_sec`
+- `silence_level_threshold`
 
-## 3. 実装の流れ
+## 2. 学習機能
 
-### 3-1. 録音機能
+課題:
+- 自動変換を強くするには「あなたの言い間違い」を学ぶ必要がある
 
-`AudioRecorder` クラスでマイク入力をバッファに保存します。  
-ホットキーで「開始」と「停止」を切り替える設計です。
+実装:
+- 最後の出力結果を保持
+- ユーザーが修正した文をコピー
+- 学習ホットキーで差分比較
+- 置換ペアを `user_replacements_ja.toml` へ保存
 
-### 3-2. 音声認識
+補足:
+- 共通辞書: `common_replacements_ja.toml`
+- 個人学習辞書: `user_replacements_ja.toml`
+- 手動辞書: `config.toml` の `[normalization.replacements]`
+- 優先順位は「手動辞書 > 学習辞書 > 共通辞書」
 
-`WhisperTranscriber` クラスで音声配列を文字列に変換します。  
-モデルは `config.toml` で変更できます。
+## 3. macメニューバー常駐
 
-### 3-3. テキスト整形
+`rumps` を使ってメニューバーアプリ化。
 
-`TextNormalizer` クラスで次を実施します。
-- 置換辞書で誤認識を修正
-- フィラーを削除
-- 余分な空白・改行・句読点の連続を整える
+メニュー項目:
+- 録音開始/停止
+- 修正を学習(クリップボード)
+- 設定を開く
+- 設定を再読込
+- ログイン起動 ON/OFF
+- 終了
 
-辞書は2段構成です。
-- 共通辞書: `common_replacements_ja.toml`（よくある修正を最初から収録）
-- 個人辞書: `config.toml` の `[normalization.replacements]`
+録音中はタイトルを `Voice●` にして状態が見えるようにした。
 
-同じキーがある場合は「個人辞書」が優先されます。
+## 4. ログイン起動
 
-### 3-4. 入力欄へ反映
+`launchd` の `LaunchAgent` を使う形にした。
 
-`OutputInserter` クラスで、結果をクリップボードに入れます。  
-`paste_after_transcribe = true` なら `Cmd+V` / `Ctrl+V` で自動貼り付けします。
+- 有効化で plist を作成して `launchctl load`
+- 無効化で `launchctl unload` + plist削除
 
-## 4. 精度改善のやり方
+## 5. 設定GUI
 
-### 4-1. モデルを重くする
+`tkinter` でシンプルな設定画面を追加。
 
-`app.model_name = "large-v3"` は精度が高いです。  
-ただし、PC性能が低いと遅くなります。
+編集できる項目:
+- ホットキー
+- モデル
+- 無音自動停止
+- 辞書ON/OFF
+- フィラー一覧
 
-### 4-2. 初期プロンプトを使う
+保存時は TOML を更新するだけの最小構成。
 
-専門用語が多い場合は `app.initial_prompt` に単語を入れると有利です。
+## 6. 使い分け
 
-例:
-```toml
-initial_prompt = "OpenAI, ChatGPT, API, Python, 音声認識"
-```
-
-### 4-3. 置換辞書を育てる
-
-実際に使って出たミスを `normalization.replacements` に追加します。  
-ここを増やすと、体感精度がかなり上がります。
-
-## 5. ファイル構成
-
-- `main.py`: 本体コード
-- `config.example.toml`: 設定サンプル
-- `common_replacements_ja.toml`: よくある言い間違い辞書
-- `requirements.txt`: 必要ライブラリ
-- `README.md`: 使い方
-- `IMPLEMENTATION_MEMO_JA.md`: この実装メモ
-
-## 6. 次の改善アイデア
-
-- Push-to-talk（押してる間だけ録音）
-- アプリ別の置換辞書（Slack用、Notion用など）
-- 音声コマンド（例: 「改行」「句点」「箇条書き」）
-- GUI化（設定画面つき）
+- 通常CLI: `python main.py --config config.toml`
+- メニューバー: `python main.py --config config.toml --tray`
+- GUI設定: `python main.py --config config.toml --settings`
+- ログイン起動ON: `python main.py --config config.toml --install-login-item`
+- ログイン起動OFF: `python main.py --uninstall-login-item`

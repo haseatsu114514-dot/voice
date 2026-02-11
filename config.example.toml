@@ -1,6 +1,9 @@
 [app]
-# ホットキー: 録音開始/停止
+# 録音開始/停止のホットキー
 hotkey = "<cmd>+<shift>+space"
+
+# 学習(修正を辞書へ反映)のホットキー
+learn_hotkey = "<cmd>+<shift>+l"
 
 # 16kHz/mono が Whisper で扱いやすい
 sample_rate = 16000
@@ -18,16 +21,26 @@ initial_prompt = ""
 # true: 文字起こし後に貼り付けまで実行 / false: クリップボードにコピーのみ
 paste_after_transcribe = true
 
-# 共通の言い間違い辞書を自動で読み込む
+# 共通の言い間違い辞書
 use_common_replacements = true
 common_replacements_file = "common_replacements_ja.toml"
+
+# 学習で増える個人辞書
+use_user_replacements = true
+user_replacements_file = "user_replacements_ja.toml"
+
+# 無音自動停止
+auto_stop_silence_enabled = true
+auto_stop_silence_sec = 1.2
+auto_stop_min_record_sec = 0.7
+silence_level_threshold = 0.01
 
 [normalization]
 remove_fillers = true
 fillers = ["えーと", "えっと", "あの", "その", "うーん", "えー"]
 
 [normalization.replacements]
-# ここは「あなた専用」の追加辞書として使う（共通辞書より優先される）
+# ここは「あなた専用」の追加辞書として使う（共通辞書/学習辞書より優先される）
 "えーあい" = "AI"
 "きょうとう" = "京都"
 "おーぷんえーあい" = "OpenAI"
