@@ -21,9 +21,12 @@ except ModuleNotFoundError:  # pragma: no cover
     import tomli as tomllib
 
 
+DEFAULT_HOTKEY = "<cmd>+<shift>+space" if sys.platform == "darwin" else "<ctrl>+<alt>+space"
+
+
 @dataclass
 class AppConfig:
-    hotkey: str = "<ctrl>+<alt>+space"
+    hotkey: str = DEFAULT_HOTKEY
     sample_rate: int = 16000
     input_device: int | str | None = None
     language: str | None = "ja"
@@ -34,6 +37,8 @@ class AppConfig:
     vad_filter: bool = True
     paste_after_transcribe: bool = True
     initial_prompt: str | None = None
+    use_common_replacements: bool = True
+    common_replacements_file: str = "common_replacements_ja.toml"
 
 
 @dataclass
@@ -63,6 +68,14 @@ def _parse_input_device(value: Any) -> int | str | None:
     raise ValueError("`app.input_device` must be an integer index or empty.")
 
 
+def _load_replacements_from_file(path: Path) -> dict[str, str]:
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    replacements = data.get("replacements", {})
+    if not isinstance(replacements, dict):
+        raise ValueError(f"`replacements` table is invalid in {path}")
+    return {str(before): str(after) for before, after in replacements.items()}
+
+
 def load_config(path: Path) -> Config:
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     app_data = data.get("app", {})
@@ -82,12 +95,33 @@ def load_config(path: Path) -> Config:
             app_data.get("paste_after_transcribe", AppConfig.paste_after_transcribe)
         ),
         initial_prompt=app_data.get("initial_prompt", AppConfig.initial_prompt),
+        use_common_replacements=bool(
+            app_data.get("use_common_replacements", AppConfig.use_common_replacements)
+        ),
+        common_replacements_file=str(
+            app_data.get("common_replacements_file", AppConfig.common_replacements_file)
+        ),
     )
+
+    common_replacements: dict[str, str] = {}
+    if app.use_common_replacements:
+        common_replacements_path = Path(app.common_replacements_file)
+        if not common_replacements_path.is_absolute():
+            common_replacements_path = path.parent / common_replacements_path
+
+        if common_replacements_path.exists():
+            common_replacements = _load_replacements_from_file(common_replacements_path)
+        else:
+            print(f"[WARN] Common replacements file not found: {common_replacements_path}", flush=True)
+
+    custom_replacements = {
+        str(before): str(after) for before, after in dict(norm_data.get("replacements", {})).items()
+    }
 
     norm = NormalizationConfig(
         remove_fillers=bool(norm_data.get("remove_fillers", True)),
         fillers=list(norm_data.get("fillers", [])) or NormalizationConfig().fillers,
-        replacements=dict(norm_data.get("replacements", {})),
+        replacements={**common_replacements, **custom_replacements},
     )
     return Config(app=app, normalization=norm)
 
@@ -241,6 +275,7 @@ class VoiceInputApp:
     def run(self) -> None:
         print("=== PC Voice Input ===", flush=True)
         print(f"Hotkey: {self.config.app.hotkey} (start/stop)", flush=True)
+        print(f"Replacements loaded: {len(self.normalizer.replacements)}", flush=True)
         print("Press Ctrl+C to exit.", flush=True)
         self.hotkey_listener.start()
         try:

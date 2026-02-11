@@ -17,6 +17,7 @@
 - グローバルホットキー: `pynput`
 - 貼り付け: `pyperclip` + キーボード操作
 - 設定: `config.toml`
+- 共通の言い間違い辞書: `common_replacements_ja.toml`
 
 理由: Pythonで組みやすく、試行錯誤しやすいからです。
 
@@ -38,6 +39,12 @@
 - 置換辞書で誤認識を修正
 - フィラーを削除
 - 余分な空白・改行・句読点の連続を整える
+
+辞書は2段構成です。
+- 共通辞書: `common_replacements_ja.toml`（よくある修正を最初から収録）
+- 個人辞書: `config.toml` の `[normalization.replacements]`
+
+同じキーがある場合は「個人辞書」が優先されます。
 
 ### 3-4. 入力欄へ反映
 
@@ -69,6 +76,7 @@ initial_prompt = "OpenAI, ChatGPT, API, Python, 音声認識"
 
 - `main.py`: 本体コード
 - `config.example.toml`: 設定サンプル
+- `common_replacements_ja.toml`: よくある言い間違い辞書
 - `requirements.txt`: 必要ライブラリ
 - `README.md`: 使い方
 - `IMPLEMENTATION_MEMO_JA.md`: この実装メモ
