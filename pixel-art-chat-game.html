@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyber Bar - Pixel Chat</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a12;
+    color: #e0e0e0;
+    font-family: 'DotGothic16', monospace, sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  #game {
+    width: 800px;
+    height: 600px;
+    background: #12121e;
+    border: 2px solid #2a2a4a;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 40px rgba(100, 50, 200, 0.3);
+  }
+
+  /* === Bar Background === */
+  #bar-bg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: linear-gradient(180deg, #0d0d1a 0%, #1a1028 40%, #1e1430 100%);
+  }
+
+  /* Neon sign */
+  .neon-sign {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 28px;
+    color: #ff66aa;
+    text-shadow:
+      0 0 5px #ff66aa,
+      0 0 10px #ff66aa,
+      0 0 20px #ff3388,
+      0 0 40px #ff3388;
+    animation: neon-flicker 3s infinite;
+    letter-spacing: 4px;
+  }
+
+  @keyframes neon-flicker {
+    0%, 100% { opacity: 1; }
+    92% { opacity: 1; }
+    93% { opacity: 0.7; }
+    94% { opacity: 1; }
+    96% { opacity: 0.8; }
+    97% { opacity: 1; }
+  }
+
+  /* Shelf / bottles */
+  .shelf {
+    position: absolute;
+    top: 60px;
+    left: 40px;
+    right: 40px;
+    height: 120px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .bottle {
+    width: 16px;
+    border-radius: 2px 2px 0 0;
+    image-rendering: pixelated;
+    position: relative;
+  }
+
+  .bottle::after {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 4px;
+    width: 8px;
+    height: 6px;
+    border-radius: 2px 2px 0 0;
+  }
+
+  /* Bar counter */
+  .bar-counter {
+    position: absolute;
+    bottom: 200px;
+    left: 0;
+    right: 0;
+    height: 24px;
+    background: linear-gradient(180deg, #3d2b1f, #2a1d15);
+    border-top: 3px solid #5a3d2e;
+    border-bottom: 2px solid #1a1008;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+
+  .bar-counter-front {
+    position: absolute;
+    bottom: 176px;
+    left: 0;
+    right: 0;
+    height: 24px;
+    background: #2a1d15;
+  }
+
+  /* Ambient lights */
+  .ambient-light {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(40px);
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  /* === Pixel Character === */
+  #character {
+    position: absolute;
+    bottom: 210px;
+    right: 160px;
+    width: 120px;
+    height: 160px;
+    image-rendering: pixelated;
+  }
+
+  /* Character built with CSS pixels */
+  .pixel-char {
+    position: relative;
+    width: 120px;
+    height: 160px;
+    transform: scale(1);
+  }
+
+  .pixel-char canvas {
+    image-rendering: pixelated;
+    width: 120px;
+    height: 160px;
+  }
+
+  /* Expression indicator */
+  #expression-indicator {
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 20px;
+    animation: float 2s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(-6px); }
+  }
+
+  /* === Chat UI === */
+  #chat-area {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 176px;
+    background: rgba(10, 10, 20, 0.95);
+    border-top: 2px solid #3a2a5a;
+  }
+
+  #name-tag {
+    position: absolute;
+    top: -28px;
+    left: 20px;
+    background: #d44a8a;
+    color: #fff;
+    padding: 4px 16px;
+    font-size: 14px;
+    clip-path: polygon(0 0, 95% 0, 100% 100%, 0% 100%);
+  }
+
+  #chat-log {
+    height: 130px;
+    overflow-y: auto;
+    padding: 12px 20px;
+    scroll-behavior: smooth;
+  }
+
+  #chat-log::-webkit-scrollbar { width: 4px; }
+  #chat-log::-webkit-scrollbar-track { background: #1a1a2e; }
+  #chat-log::-webkit-scrollbar-thumb { background: #4a3a6a; border-radius: 2px; }
+
+  .msg {
+    margin-bottom: 8px;
+    line-height: 1.5;
+    font-size: 14px;
+    animation: msg-in 0.3s ease-out;
+  }
+
+  @keyframes msg-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg-char {
+    color: #ff88bb;
+  }
+
+  .msg-player {
+    color: #88bbff;
+  }
+
+  .msg .speaker {
+    font-weight: bold;
+    margin-right: 8px;
+  }
+
+  #input-area {
+    display: flex;
+    padding: 0 20px 12px 20px;
+    gap: 8px;
+  }
+
+  #player-input {
+    flex: 1;
+    background: #1a1a2e;
+    border: 1px solid #3a2a5a;
+    color: #e0e0e0;
+    padding: 8px 12px;
+    font-family: 'DotGothic16', monospace;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  #player-input:focus {
+    border-color: #7a5aaa;
+  }
+
+  #player-input::placeholder {
+    color: #4a4a6a;
+  }
+
+  #send-btn {
+    background: #d44a8a;
+    border: none;
+    color: #fff;
+    padding: 8px 20px;
+    font-family: 'DotGothic16', monospace;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  #send-btn:hover {
+    background: #e05a9a;
+  }
+
+  /* Choice buttons */
+  #choices {
+    display: flex;
+    gap: 8px;
+    padding: 0 20px 12px 20px;
+    flex-wrap: wrap;
+  }
+
+  .choice-btn {
+    background: transparent;
+    border: 1px solid #7a5aaa;
+    color: #bb99ee;
+    padding: 6px 16px;
+    font-family: 'DotGothic16', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .choice-btn:hover {
+    background: #7a5aaa;
+    color: #fff;
+  }
+
+  /* Stars */
+  .star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: #fff;
+    border-radius: 50%;
+    animation: twinkle 2s ease-in-out infinite;
+  }
+
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+
+  /* Scanline effect */
+  #scanlines {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.1) 2px,
+      rgba(0, 0, 0, 0.1) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* Typing indicator */
+  .typing-dots {
+    display: inline-block;
+  }
+  .typing-dots span {
+    animation: dot-bounce 1.2s infinite;
+    display: inline-block;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dot-bounce {
+    0%, 60%, 100% { opacity: 0.3; }
+    30% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div id="game">
+  <div id="bar-bg">
+    <!-- Ambient lights -->
+    <div class="ambient-light" style="top:30px;left:100px;width:200px;height:200px;background:#a040c0;"></div>
+    <div class="ambient-light" style="top:50px;right:80px;width:160px;height:160px;background:#4060d0;"></div>
+    <div class="ambient-light" style="top:100px;left:300px;width:180px;height:180px;background:#d04080;opacity:0.2;"></div>
+  </div>
+
+  <div class="neon-sign">CYBER BAR</div>
+
+  <div class="shelf" id="shelf"></div>
+
+  <div class="bar-counter"></div>
+  <div class="bar-counter-front"></div>
+
+  <div id="character">
+    <div id="expression-indicator"></div>
+    <canvas id="char-canvas" width="16" height="22"></canvas>
+  </div>
+
+  <!-- Chat -->
+  <div id="chat-area">
+    <div id="name-tag">ミク</div>
+    <div id="chat-log"></div>
+    <div id="choices"></div>
+    <div id="input-area">
+      <input type="text" id="player-input" placeholder="なにか話しかけてみて...">
+      <button id="send-btn">送信</button>
+    </div>
+  </div>
+
+  <div id="scanlines"></div>
+</div>
+
+<script>
+// === Pixel Art Character Drawing ===
+const canvas = document.getElementById('char-canvas');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+function drawCharacter(expression) {
+  ctx.clearRect(0, 0, 16, 22);
+
+  // Hair (teal/cyan)
+  const hair = '#22ccbb';
+  const hairDark = '#1a9988';
+  const skin = '#ffd8c0';
+  const skinShadow = '#eebb99';
+  const eyes = '#cc3366';
+  const white = '#ffffff';
+  const shirt = '#222244';
+  const shirtLight = '#333366';
+
+  // Hair top
+  const pixels = [
+    // Row 0-1: Hair top
+    [5,0,hair],[6,0,hair],[7,0,hair],[8,0,hair],[9,0,hair],[10,0,hair],
+    [4,1,hair],[5,1,hairDark],[6,1,hair],[7,1,hair],[8,1,hair],[9,1,hair],[10,1,hairDark],[11,1,hair],
+
+    // Row 2-3: Hair sides + forehead
+    [3,2,hair],[4,2,hair],[5,2,hair],[6,2,hair],[7,2,hair],[8,2,hair],[9,2,hair],[10,2,hair],[11,2,hair],[12,2,hair],
+    [3,3,hair],[4,3,hair],[5,3,skin],[6,3,skin],[7,3,skin],[8,3,skin],[9,3,skin],[10,3,skin],[11,3,hair],[12,3,hair],
+
+    // Row 4: Hair + face
+    [2,4,hair],[3,4,hair],[4,4,skin],[5,4,skin],[6,4,skin],[7,4,skin],[8,4,skin],[9,4,skin],[10,4,skin],[11,4,hair],[12,4,hair],
+
+    // Row 5: Eyes row
+    [2,5,hair],[3,5,skin],[4,5,skin],
+    [5,5, expression === 'closed' ? skin : white],
+    [6,5, expression === 'closed' ? skin : eyes],
+    [7,5,skin],[8,5,skin],
+    [9,5, expression === 'closed' ? skin : white],
+    [10,5, expression === 'closed' ? skin : eyes],
+    [11,5,skin],[12,6,hair],[13,5,hair],
+
+    // Row 6: Mouth area
+    [2,6,hair],[3,6,skin],[4,6,skin],[5,6,skin],[6,6,skin],
+    [7,6, expression === 'happy' ? '#ee5577' : (expression === 'surprised' ? '#cc4466' : skin)],
+    [8,6, expression === 'happy' ? '#ee5577' : skin],
+    [9,6,skin],[10,6,skin],[11,6,skin],[12,6,hair],[13,6,hair],
+
+    // Row 7: Chin + hair
+    [2,7,hair],[3,7,hair],[4,7,skin],[5,7,skinShadow],[6,7,skin],[7,7,skin],[8,7,skin],[9,7,skinShadow],[10,7,skin],[11,7,hair],[12,7,hair],[13,7,hair],
+
+    // Row 8: Neck
+    [2,8,hair],[3,8,hair],[4,8,hair],[5,8,skin],[6,8,skin],[7,8,skin],[8,8,skin],[9,8,skin],[10,8,hair],[11,8,hair],[12,8,hair],
+
+    // Row 9-10: Shoulders + hair falling
+    [1,9,hair],[2,9,hair],[3,9,hair],[4,9,shirt],[5,9,shirt],[6,9,skin],[7,9,skin],[8,9,skin],[9,9,shirt],[10,9,shirt],[11,9,hair],[12,9,hair],[13,9,hair],
+    [1,10,hair],[2,10,hair],[3,10,shirt],[4,10,shirt],[5,10,shirt],[6,10,shirt],[7,10,shirt],[8,10,shirt],[9,10,shirt],[10,10,shirt],[11,10,hair],[12,10,hair],[13,10,hair],[14,10,hair],
+
+    // Row 11-14: Body
+    [1,11,hair],[2,11,shirt],[3,11,shirt],[4,11,shirtLight],[5,11,shirt],[6,11,shirt],[7,11,shirt],[8,11,shirt],[9,11,shirtLight],[10,11,shirt],[11,11,shirt],[12,11,hair],[13,11,hair],[14,11,hair],
+    [1,12,hair],[2,12,shirt],[3,12,shirt],[4,12,shirt],[5,12,shirt],[6,12,shirtLight],[7,12,shirt],[8,12,shirtLight],[9,12,shirt],[10,12,shirt],[11,12,shirt],[12,12,hair],[13,12,hair],
+    [0,13,hair],[1,13,hair],[2,13,shirt],[3,13,shirt],[4,13,shirt],[5,13,shirt],[6,13,shirt],[7,13,shirt],[8,13,shirt],[9,13,shirt],[10,13,shirt],[11,13,shirt],[12,13,hair],[13,13,hair],
+    [0,14,hair],[1,14,hair],[2,14,shirt],[3,14,shirt],[4,14,shirt],[5,14,shirt],[6,14,shirt],[7,14,shirt],[8,14,shirt],[9,14,shirt],[10,14,shirt],[11,14,shirt],[12,14,hair],[13,14,hair],
+
+    // Row 15-17: Lower body / skirt
+    [1,15,hair],[2,15,'#331144'],[3,15,'#331144'],[4,15,'#331144'],[5,15,'#331144'],[6,15,'#331144'],[7,15,'#331144'],[8,15,'#331144'],[9,15,'#331144'],[10,15,'#331144'],[11,15,'#331144'],[12,15,hair],
+    [1,16,hair],[2,16,'#2a0e3a'],[3,16,'#2a0e3a'],[4,16,'#2a0e3a'],[5,16,'#2a0e3a'],[6,16,'#2a0e3a'],[7,16,'#2a0e3a'],[8,16,'#2a0e3a'],[9,16,'#2a0e3a'],[10,16,'#2a0e3a'],[11,16,'#2a0e3a'],[12,16,hair],
+    [2,17,'#2a0e3a'],[3,17,'#2a0e3a'],[4,17,'#2a0e3a'],[5,17,'#2a0e3a'],[6,17,'#2a0e3a'],[7,17,'#2a0e3a'],[8,17,'#2a0e3a'],[9,17,'#2a0e3a'],[10,17,'#2a0e3a'],[11,17,'#2a0e3a'],
+
+    // Legs
+    [4,18,skin],[5,18,skin],[8,18,skin],[9,18,skin],
+    [4,19,skin],[5,19,skin],[8,19,skin],[9,19,skin],
+    [4,20,'#222244'],[5,20,'#222244'],[8,20,'#222244'],[9,20,'#222244'],
+    [4,21,'#222244'],[5,21,'#222244'],[8,21,'#222244'],[9,21,'#222244'],
+  ];
+
+  pixels.forEach(([x, y, color]) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, 1, 1);
+  });
+}
+
+drawCharacter('normal');
+
+// === Bottles on shelf ===
+const shelf = document.getElementById('shelf');
+const bottleColors = ['#ff4466','#44aaff','#44ff88','#ffaa44','#aa44ff','#ff44aa','#44ffcc','#ffff44','#ff6644','#4488ff','#88ff44','#ff44ff'];
+bottleColors.forEach(color => {
+  const b = document.createElement('div');
+  b.className = 'bottle';
+  b.style.height = (30 + Math.random() * 40) + 'px';
+  b.style.background = color;
+  b.style.opacity = '0.7';
+  b.style.boxShadow = `0 0 8px ${color}40`;
+  shelf.appendChild(b);
+});
+
+// === Stars ===
+const barBg = document.getElementById('bar-bg');
+for (let i = 0; i < 20; i++) {
+  const star = document.createElement('div');
+  star.className = 'star';
+  star.style.left = Math.random() * 100 + '%';
+  star.style.top = Math.random() * 30 + '%';
+  star.style.animationDelay = Math.random() * 2 + 's';
+  barBg.appendChild(star);
+}
+
+// === Chat System ===
+const chatLog = document.getElementById('chat-log');
+const playerInput = document.getElementById('player-input');
+const sendBtn = document.getElementById('send-btn');
+const choicesDiv = document.getElementById('choices');
+const expressionIndicator = document.getElementById('expression-indicator');
+
+let isTyping = false;
+let currentPhase = 'intro';
+
+// Dialogue data
+const dialogueTree = {
+  intro: {
+    messages: [
+      { speaker: 'ミク', text: 'いらっしゃい。このバーは初めて？', expression: 'normal' },
+    ],
+    choices: [
+      { text: 'うん、初めて来た', next: 'first_time' },
+      { text: '常連だよ', next: 'regular' },
+      { text: '...（黙って座る）', next: 'silent' },
+    ]
+  },
+  first_time: {
+    messages: [
+      { speaker: 'ミク', text: 'そっか、ようこそ。ここは「Cyber Bar」...', expression: 'happy' },
+      { speaker: 'ミク', text: '色んな人が来る場所だよ。気楽にしてて。', expression: 'normal' },
+      { speaker: 'ミク', text: '何か飲む？', expression: 'happy' },
+    ],
+    choices: [
+      { text: 'おすすめは？', next: 'recommend' },
+      { text: '強いやつをくれ', next: 'strong' },
+      { text: '水でいい', next: 'water' },
+    ]
+  },
+  regular: {
+    messages: [
+      { speaker: 'ミク', text: '...あれ、そうだっけ？顔覚えてないな。', expression: 'surprised' },
+      { speaker: 'ミク', text: 'まあいいや、いつもの？...って言いたいけど何飲む？', expression: 'happy' },
+    ],
+    choices: [
+      { text: 'おすすめは？', next: 'recommend' },
+      { text: '強いやつをくれ', next: 'strong' },
+      { text: '水でいい', next: 'water' },
+    ]
+  },
+  silent: {
+    messages: [
+      { speaker: 'ミク', text: '...寡黙なタイプ？嫌いじゃないよ。', expression: 'normal' },
+      { speaker: 'ミク', text: '話したくなったらいつでもどうぞ。', expression: 'happy' },
+      { speaker: 'ミク', text: 'とりあえず何か飲む？', expression: 'normal' },
+    ],
+    choices: [
+      { text: 'おすすめは？', next: 'recommend' },
+      { text: '...（頷く）', next: 'recommend' },
+    ]
+  },
+  recommend: {
+    messages: [
+      { speaker: 'ミク', text: '「ネオンサンセット」っていうカクテル、人気だよ。', expression: 'happy' },
+      { speaker: 'ミク', text: '光るんだ、このカクテル。綺麗でしょ？', expression: 'happy' },
+    ],
+    choices: [
+      { text: 'じゃあそれで', next: 'drink_neon' },
+      { text: 'ミクはいつからここで働いてるの？', next: 'about_work' },
+    ]
+  },
+  strong: {
+    messages: [
+      { speaker: 'ミク', text: '強いの好きなんだ。「ブラックアウト」でいい？', expression: 'normal' },
+      { speaker: 'ミク', text: '...3杯で大体みんな潰れるけどね。', expression: 'happy' },
+    ],
+    choices: [
+      { text: '望むところだ', next: 'drink_strong' },
+      { text: 'やっぱ普通のにする', next: 'recommend' },
+    ]
+  },
+  water: {
+    messages: [
+      { speaker: 'ミク', text: '水...？バーに来て水？', expression: 'surprised' },
+      { speaker: 'ミク', text: 'まあいいけどね。はい、お水。', expression: 'normal' },
+      { speaker: 'ミク', text: '...健康的でいいんじゃない？', expression: 'happy' },
+    ],
+    choices: [
+      { text: 'ありがとう', next: 'chat_start' },
+      { text: 'やっぱりカクテルにする', next: 'recommend' },
+    ]
+  },
+  drink_neon: {
+    messages: [
+      { speaker: 'ミク', text: 'はい、ネオンサンセット。', expression: 'happy' },
+      { speaker: 'ミク', text: '...どう？美味しい？', expression: 'normal' },
+    ],
+    choices: [
+      { text: 'すごく美味しい！', next: 'chat_start' },
+      { text: 'まあまあかな', next: 'chat_start_2' },
+    ]
+  },
+  drink_strong: {
+    messages: [
+      { speaker: 'ミク', text: 'はい、ブラックアウト。気をつけてね。', expression: 'normal' },
+      { speaker: 'ミク', text: '...おっ、一気にいったね。大丈夫？', expression: 'surprised' },
+    ],
+    choices: [
+      { text: '余裕余裕', next: 'chat_start' },
+      { text: '...効くね...', next: 'chat_start_2' },
+    ]
+  },
+  about_work: {
+    messages: [
+      { speaker: 'ミク', text: 'んー...もう3年くらいかな。', expression: 'normal' },
+      { speaker: 'ミク', text: 'この街が好きなんだよね。ネオンが綺麗で。', expression: 'happy' },
+      { speaker: 'ミク', text: 'それに、色んな人の話が聞けるし。', expression: 'happy' },
+    ],
+    choices: [
+      { text: 'いい仕事だね', next: 'chat_start' },
+      { text: 'この街について教えて', next: 'about_city' },
+    ]
+  },
+  about_city: {
+    messages: [
+      { speaker: 'ミク', text: 'この街？そうだなぁ...', expression: 'normal' },
+      { speaker: 'ミク', text: '昔はもっと静かだったらしいけど、今はこの通り。', expression: 'normal' },
+      { speaker: 'ミク', text: 'でもさ、夜の屋上から見るネオンの海は最高だよ。', expression: 'happy' },
+      { speaker: 'ミク', text: '...いつか見せてあげるよ。', expression: 'happy' },
+    ],
+    choices: [
+      { text: '約束だよ', next: 'chat_start' },
+      { text: '楽しみにしてる', next: 'chat_start' },
+    ]
+  },
+  chat_start: {
+    messages: [
+      { speaker: 'ミク', text: 'えへへ。ありがと。', expression: 'happy' },
+      { speaker: 'ミク', text: 'なんか話したいことある？なんでも聞くよ。', expression: 'normal' },
+    ],
+    choices: null // Free chat mode
+  },
+  chat_start_2: {
+    messages: [
+      { speaker: 'ミク', text: 'あはは、正直だね。', expression: 'happy' },
+      { speaker: 'ミク', text: 'まあゆっくりしてってよ。話し相手にはなるからさ。', expression: 'normal' },
+    ],
+    choices: null // Free chat mode
+  },
+};
+
+// Free chat responses
+const freeResponses = {
+  greetings: {
+    patterns: ['こんにちは', 'やあ', 'おはよう', 'こんばんは', 'ハロー', 'hello', 'hi'],
+    responses: [
+      { text: 'ん？改めて挨拶？...こんばんは。', expression: 'happy' },
+      { text: 'やあやあ。元気そうだね。', expression: 'happy' },
+    ]
+  },
+  name: {
+    patterns: ['名前', 'なまえ', '誰', 'だれ'],
+    responses: [
+      { text: 'ミクだよ。ここのバーテンダー。覚えてね。', expression: 'happy' },
+    ]
+  },
+  hobby: {
+    patterns: ['趣味', 'しゅみ', '好きなこと', '休み'],
+    responses: [
+      { text: '音楽聴くのが好きかな。あとは...街を散歩したり。', expression: 'happy' },
+      { text: '仕事終わりに屋上で星見るの。最近のお気に入り。', expression: 'normal' },
+    ]
+  },
+  music: {
+    patterns: ['音楽', 'おんがく', '曲', '歌'],
+    responses: [
+      { text: 'シンセウェイブが好き。この店のBGMも私が選んでるんだ。', expression: 'happy' },
+      { text: 'いい曲知ってたら教えてよ。プレイリストに入れるから。', expression: 'happy' },
+    ]
+  },
+  food: {
+    patterns: ['食べ物', 'たべもの', '料理', 'ごはん', '食べ', 'おなか'],
+    responses: [
+      { text: 'うちはドリンク専門だけど...隣の屋台のラーメン、美味しいよ。', expression: 'normal' },
+      { text: 'おつまみならナッツくらいはあるけど...食事は他でお願い。', expression: 'happy' },
+    ]
+  },
+  love: {
+    patterns: ['好き', 'すき', '可愛い', 'かわいい', '綺麗', 'きれい', '付き合', 'デート'],
+    responses: [
+      { text: '...え？ちょ、急にそういうこと言われると困るんだけど。', expression: 'surprised' },
+      { text: '...バーテンダーに口説かれるの、職業病みたいなものかな。', expression: 'happy' },
+    ]
+  },
+  sad: {
+    patterns: ['疲れ', 'つかれ', '辛い', 'つらい', '悲しい', 'かなしい', '嫌', '大変'],
+    responses: [
+      { text: '...そっか。まあ、ここにいる間はゆっくりしなよ。', expression: 'normal' },
+      { text: '辛い時は無理しなくていいんだよ。ほら、もう一杯どう？', expression: 'normal' },
+    ]
+  },
+  future: {
+    patterns: ['将来', '未来', '夢', 'ゆめ', '目標'],
+    responses: [
+      { text: '夢？...いつか自分の店持ちたいかな。もっと小さいやつ。', expression: 'normal' },
+      { text: '未来のことはあんまり考えないようにしてる。今が楽しければいいじゃん。', expression: 'happy' },
+    ]
+  },
+  weather: {
+    patterns: ['天気', 'てんき', '雨', '晴れ', '寒い', '暑い'],
+    responses: [
+      { text: '外？ずっとここにいるからわかんないな...。窓ないし。', expression: 'normal' },
+      { text: 'この街は年中ネオンで明るいから、天気とかあんまり関係ないかも。', expression: 'happy' },
+    ]
+  },
+  bye: {
+    patterns: ['バイバイ', 'ばいばい', 'さよなら', 'じゃあね', 'また', '帰る', 'おやすみ'],
+    responses: [
+      { text: 'もう帰るの？...またおいでよ。待ってるから。', expression: 'normal' },
+      { text: 'おやすみ。気をつけて帰ってね。...またね。', expression: 'happy' },
+    ]
+  },
+  default: [
+    { text: 'ふーん...なるほどね。', expression: 'normal' },
+    { text: 'そうなんだ。もうちょっと詳しく聞かせてよ。', expression: 'normal' },
+    { text: '面白いね。この街にいると色んな話が聞けるよ。', expression: 'happy' },
+    { text: '...ふふ、変なこと言うね。嫌いじゃないけど。', expression: 'happy' },
+    { text: 'へー。あんまり聞かない話だね。', expression: 'normal' },
+    { text: 'ん？...あー、うん、そういうこともあるよね。', expression: 'normal' },
+    { text: '...ちょっと何言ってるかわかんないけど、まあいっか。', expression: 'surprised' },
+    { text: 'あはは。今日は楽しいお客さんだね。', expression: 'happy' },
+  ]
+};
+
+function setExpression(expr) {
+  drawCharacter(expr);
+  const indicators = { happy: '♪', surprised: '！', normal: '', closed: '...' };
+  expressionIndicator.textContent = indicators[expr] || '';
+}
+
+function addMessage(speaker, text, isChar) {
+  const div = document.createElement('div');
+  div.className = `msg ${isChar ? 'msg-char' : 'msg-player'}`;
+  div.innerHTML = `<span class="speaker">${speaker}:</span>${text}`;
+  chatLog.appendChild(div);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+function showChoices(choices) {
+  choicesDiv.innerHTML = '';
+  document.getElementById('input-area').style.display = 'none';
+  choices.forEach(choice => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.textContent = choice.text;
+    btn.addEventListener('click', () => {
+      addMessage('あなた', choice.text, false);
+      choicesDiv.innerHTML = '';
+      playDialogue(choice.next);
+    });
+    choicesDiv.appendChild(btn);
+  });
+}
+
+function enableFreeChat() {
+  choicesDiv.innerHTML = '';
+  document.getElementById('input-area').style.display = 'flex';
+  playerInput.focus();
+}
+
+function getFreeResponse(input) {
+  for (const category of Object.values(freeResponses)) {
+    if (category.patterns) {
+      for (const pattern of category.patterns) {
+        if (input.includes(pattern)) {
+          return category.responses[Math.floor(Math.random() * category.responses.length)];
+        }
+      }
+    }
+  }
+  return freeResponses.default[Math.floor(Math.random() * freeResponses.default.length)];
+}
+
+async function typeMessage(speaker, text, expression) {
+  isTyping = true;
+  setExpression(expression || 'normal');
+
+  // Show typing indicator briefly
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'msg msg-char';
+  typingDiv.innerHTML = `<span class="speaker">${speaker}:</span><span class="typing-dots"><span>.</span><span>.</span><span>.</span></span>`;
+  chatLog.appendChild(typingDiv);
+  chatLog.scrollTop = chatLog.scrollHeight;
+
+  await new Promise(r => setTimeout(r, 400 + Math.random() * 600));
+  typingDiv.remove();
+
+  addMessage(speaker, text, true);
+  isTyping = false;
+}
+
+async function playDialogue(phaseKey) {
+  currentPhase = phaseKey;
+  const phase = dialogueTree[phaseKey];
+  if (!phase) return;
+
+  for (const msg of phase.messages) {
+    await typeMessage(msg.speaker, msg.text, msg.expression);
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  if (phase.choices) {
+    showChoices(phase.choices);
+  } else {
+    enableFreeChat();
+  }
+}
+
+// Handle free chat input
+async function handlePlayerInput() {
+  const text = playerInput.value.trim();
+  if (!text || isTyping) return;
+
+  playerInput.value = '';
+  addMessage('あなた', text, false);
+
+  const response = getFreeResponse(text);
+  await typeMessage('ミク', response.text, response.expression);
+}
+
+sendBtn.addEventListener('click', handlePlayerInput);
+playerInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') handlePlayerInput();
+});
+
+// Start the game
+document.getElementById('input-area').style.display = 'none';
+playDialogue('intro');
+</script>
+</body>
+</html>
