@@ -554,19 +554,31 @@ final class SoundCuePlayer: NSObject, AVAudioPlayerDelegate {
 }
 
 final class SystemAudioMuteService {
-    private var previousMutedState: Bool?
+    private struct PreviousAudioState {
+        let isMuted: Bool
+        let outputVolume: Int
+    }
+
+    private var previousAudioState: PreviousAudioState?
 
     func muteSystemAudioForRecording() throws {
-        guard previousMutedState == nil else { return }
+        guard previousAudioState == nil else { return }
         guard let currentMuted = readCurrentMutedState() else {
             throw NSError(domain: "SystemAudioMuteService", code: 1, userInfo: [
                 NSLocalizedDescriptionKey: "録音中ミュートの状態を確認できませんでした。"
             ])
         }
-        previousMutedState = currentMuted
-        guard !currentMuted else { return }
-        guard runAppleScript("set volume output muted true") != nil else {
-            previousMutedState = nil
+        guard let currentVolume = readCurrentOutputVolume() else {
+            throw NSError(domain: "SystemAudioMuteService", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: "録音中ミュートの音量を確認できませんでした。"
+            ])
+        }
+
+        previousAudioState = PreviousAudioState(isMuted: currentMuted, outputVolume: currentVolume)
+
+        guard runAppleScript("set volume output volume 0") != nil,
+              runAppleScript("set volume output muted true") != nil else {
+            previousAudioState = nil
             throw NSError(domain: "SystemAudioMuteService", code: 2, userInfo: [
                 NSLocalizedDescriptionKey: "録音中ミュートを有効にできませんでした。"
             ])
@@ -574,9 +586,10 @@ final class SystemAudioMuteService {
     }
 
     func restoreSystemAudioAfterRecording() {
-        guard let previousMutedState else { return }
-        _ = runAppleScript("set volume output muted \(previousMutedState ? "true" : "false")")
-        self.previousMutedState = nil
+        guard let previousAudioState else { return }
+        _ = runAppleScript("set volume output volume \(previousAudioState.outputVolume)")
+        _ = runAppleScript("set volume output muted \(previousAudioState.isMuted ? "true" : "false")")
+        self.previousAudioState = nil
     }
 
     private func readCurrentMutedState() -> Bool? {
@@ -591,6 +604,13 @@ final class SystemAudioMuteService {
             return false
         }
         return nil
+    }
+
+    private func readCurrentOutputVolume() -> Int? {
+        guard let output = runAppleScript("output volume of (get volume settings)") else {
+            return nil
+        }
+        return Int(output.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     @discardableResult
