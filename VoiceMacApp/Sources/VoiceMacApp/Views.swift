@@ -136,7 +136,7 @@ struct StandardMicView: View {
                             tint: controller.statusColor,
                             isActive: controller.status.isListening
                         )
-                        .frame(height: 36)
+                        .frame(height: 42)
 
                         if controller.status.isError {
                             Text("問題が起きました。必要なときだけ詳細を見られます。")
@@ -257,28 +257,16 @@ struct CompactMicView: View {
                 tint: controller.statusColor,
                 isActive: controller.status.isListening
             )
-            .frame(height: 24)
+            .frame(height: 40)
 
-            VStack(spacing: 4) {
-                Text(controller.currentShortcutText)
+            VStack(spacing: 3) {
+                Text("\(controller.settings.recordShortcut.displayString) / \(controller.settings.polishTone.title) / \(controller.settings.recordingAudioControlMode.title)")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(.secondary)
-                Text(controller.apiSetupStatusText)
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(controller.apiStatusTint)
-                Text(controller.monthlyCostJPYText)
+                Text("\(controller.apiSetupStatusText)  ・  \(controller.monthlyCostJPYText)")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
-                Text("再生音: \(controller.settings.recordingAudioControlMode.title)")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text(controller.savingsSummaryText)
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text(controller.dailySavingsSummaryText)
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text(controller.monthlyStats.shortSummaryText)
+                Text("\(controller.savingsSummaryText)  ・  \(controller.monthlyStats.shortSummaryText)")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(.secondary)
                 if !controller.inlineErrorText.isEmpty {

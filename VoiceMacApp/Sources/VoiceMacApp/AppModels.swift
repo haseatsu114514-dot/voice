@@ -81,7 +81,7 @@ enum InterfaceMode: String, CaseIterable, Identifiable, Codable {
         case .standard:
             return CGSize(width: 360, height: 560)
         case .compact:
-            return CGSize(width: 190, height: 316)
+            return CGSize(width: 198, height: 356)
         }
     }
 }

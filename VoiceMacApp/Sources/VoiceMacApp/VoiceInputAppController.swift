@@ -634,32 +634,44 @@ final class VoiceInputAppController: ObservableObject {
             errorMessage = ""
         }
 
-        guard let targetApplication = resolvedPasteTargetApplication() else {
+        guard let initialTargetApplication = resolvedPasteTargetApplication() else {
             status = .error("貼り付け先が見つかりませんでした。")
             errorMessage = "貼り付け先が見つかりませんでした。原因: 戻る先のアプリや入力欄が見つかっていません。先に貼り付けたいアプリを開いてください。"
             return false
         }
 
+        var targetApplication = initialTargetApplication
         _ = targetApplication.unhide()
         _ = targetApplication.activate(options: [.activateIgnoringOtherApps])
 
         try? await Task.sleep(nanoseconds: 180_000_000)
 
-        switch insertTextDirectly(text, into: targetApplication) {
-        case .success:
-            errorMessage = ""
-            return true
-        case .noEditableTarget(let message):
-            status = .error("貼り付け先に入力欄がありません。")
-            errorMessage = message
-            return false
-        case .failed:
-            break
-        }
+        for attempt in 0..<4 {
+            if let refreshedTarget = resolvedPasteTargetApplication() {
+                targetApplication = refreshedTarget
+            }
 
-        if NSWorkspace.shared.frontmostApplication?.processIdentifier != targetApplication.processIdentifier {
-            _ = targetApplication.activate(options: [.activateIgnoringOtherApps])
-            try? await Task.sleep(nanoseconds: 120_000_000)
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier != targetApplication.processIdentifier {
+                _ = targetApplication.activate(options: [.activateIgnoringOtherApps])
+                try? await Task.sleep(nanoseconds: 120_000_000)
+            }
+
+            switch insertTextDirectly(text, into: targetApplication) {
+            case .success:
+                errorMessage = ""
+                refreshAccessibilityStatus()
+                return true
+            case .noEditableTarget(let message):
+                if attempt == 3 {
+                    status = .error("貼り付け先に入力欄がありません。")
+                    errorMessage = message
+                    return false
+                }
+            case .failed:
+                break
+            }
+
+            try? await Task.sleep(nanoseconds: 90_000_000)
         }
 
         guard postCommandV(to: targetApplication.processIdentifier) || postCommandV() else {
@@ -674,8 +686,7 @@ final class VoiceInputAppController: ObservableObject {
     }
 
     private func insertTextDirectly(_ text: String, into application: NSRunningApplication) -> PasteDeliveryResult {
-        let appElement = AXUIElementCreateApplication(application.processIdentifier)
-        guard let focusedElement = focusedElement(in: appElement) else {
+        guard let focusedElement = focusedElement(for: application) else {
             return .noEditableTarget(
                 "貼り付け先に入力欄がありません。原因: 入力欄が選ばれていません。貼り付けたい欄を一度クリックしてから使ってください。"
             )
@@ -698,6 +709,20 @@ final class VoiceInputAppController: ObservableObject {
         return .noEditableTarget(
             "貼り付け先に入力欄がありません。原因: 今開いている場所は文字入力できない画面です。メモやチャット欄を選んでから使ってください。"
         )
+    }
+
+    private func focusedElement(for application: NSRunningApplication) -> AXUIElement? {
+        let systemWideElement = AXUIElementCreateSystemWide()
+        if let focusedSystemElement = focusedElement(in: systemWideElement) {
+            var pid: pid_t = 0
+            AXUIElementGetPid(focusedSystemElement, &pid)
+            if pid == application.processIdentifier {
+                return focusedSystemElement
+            }
+        }
+
+        let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
+        return focusedElement(in: applicationElement)
     }
 
     private func postCommandV(to pid: pid_t? = nil) -> Bool {
