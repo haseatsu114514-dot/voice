@@ -868,7 +868,19 @@ struct SettingsView: View {
 
                         GroupBox("録音の細かい動作") {
                             VStack(alignment: .leading, spacing: 10) {
-                                Toggle("録音中はMacの再生音をミュートする", isOn: $controller.settings.muteSystemAudioWhileRecording)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("録音中の再生音")
+                                        .font(.system(size: 11, weight: .semibold))
+                                    Picker("録音中の再生音", selection: $controller.settings.recordingAudioControlMode) {
+                                        ForEach(RecordingAudioControlMode.allCases) { mode in
+                                            Text(mode.title).tag(mode)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    Text(controller.settings.recordingAudioControlMode.subtitle)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                }
                                 Toggle("開始音と終了音を鳴らす", isOn: $controller.settings.soundCuesEnabled)
                                 Toggle("フィラーを自動で減らす", isOn: $controller.settings.fillerRemoval)
                                 Toggle("無音で自動停止する", isOn: $controller.settings.autoStopEnabled)

@@ -389,9 +389,9 @@ final class VoiceInputAppController: ObservableObject {
                 errorMessage = ""
                 recordingElapsedSeconds = 0
                 audioLevels = Array(repeating: 0.08, count: 14)
-                if settings.muteSystemAudioWhileRecording {
+                if settings.recordingAudioControlMode != .unchanged {
                     do {
-                        try systemAudioMuteService.muteSystemAudioForRecording()
+                        try systemAudioMuteService.applyRecordingAudioControl(settings.recordingAudioControlMode)
                     } catch {
                         errorMessage = localized(error)
                     }

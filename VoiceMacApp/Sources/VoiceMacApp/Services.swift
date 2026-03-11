@@ -17,7 +17,7 @@ final class SettingsStore: ObservableObject {
     @Published var autoStopSeconds: Double { didSet { save() } }
     @Published var fillerRemoval: Bool { didSet { save() } }
     @Published var alwaysOnTop: Bool { didSet { save() } }
-    @Published var muteSystemAudioWhileRecording: Bool { didSet { save() } }
+    @Published var recordingAudioControlMode: RecordingAudioControlMode { didSet { save() } }
 
     private let defaults = UserDefaults.standard
 
@@ -63,7 +63,13 @@ final class SettingsStore: ObservableObject {
         self.autoStopSeconds = defaults.object(forKey: "settings.autoStopSeconds") as? Double ?? 1.2
         self.fillerRemoval = defaults.object(forKey: "settings.fillerRemoval") as? Bool ?? true
         self.alwaysOnTop = defaults.object(forKey: "settings.alwaysOnTop") as? Bool ?? true
-        self.muteSystemAudioWhileRecording = defaults.object(forKey: "settings.muteSystemAudioWhileRecording") as? Bool ?? true
+        if let audioControlRaw = defaults.string(forKey: "settings.recordingAudioControlMode"),
+           let savedAudioControl = RecordingAudioControlMode(rawValue: audioControlRaw) {
+            self.recordingAudioControlMode = savedAudioControl
+        } else {
+            let legacyMute = defaults.object(forKey: "settings.muteSystemAudioWhileRecording") as? Bool ?? true
+            self.recordingAudioControlMode = legacyMute ? .mute : .unchanged
+        }
     }
 
     private func save() {
@@ -77,7 +83,7 @@ final class SettingsStore: ObservableObject {
         defaults.set(autoStopSeconds, forKey: "settings.autoStopSeconds")
         defaults.set(fillerRemoval, forKey: "settings.fillerRemoval")
         defaults.set(alwaysOnTop, forKey: "settings.alwaysOnTop")
-        defaults.set(muteSystemAudioWhileRecording, forKey: "settings.muteSystemAudioWhileRecording")
+        defaults.set(recordingAudioControlMode.rawValue, forKey: "settings.recordingAudioControlMode")
         if let encoded = try? JSONEncoder().encode(recordShortcut) {
             defaults.set(encoded, forKey: "settings.recordShortcut")
         }
@@ -579,7 +585,8 @@ final class SystemAudioMuteService {
 
     private var previousAudioState: PreviousAudioState?
 
-    func muteSystemAudioForRecording() throws {
+    func applyRecordingAudioControl(_ mode: RecordingAudioControlMode) throws {
+        guard mode != .unchanged else { return }
         guard previousAudioState == nil else { return }
         guard let currentMuted = readCurrentMutedState() else {
             throw NSError(domain: "SystemAudioMuteService", code: 1, userInfo: [
@@ -594,8 +601,20 @@ final class SystemAudioMuteService {
 
         previousAudioState = PreviousAudioState(isMuted: currentMuted, outputVolume: currentVolume)
 
-        guard runAppleScript("set volume output volume 0") != nil,
-              runAppleScript("set volume output muted true") != nil else {
+        let success: Bool
+        switch mode {
+        case .unchanged:
+            success = true
+        case .duck:
+            let loweredVolume = min(currentVolume, 20)
+            success = runAppleScript("set volume output muted false") != nil &&
+                runAppleScript("set volume output volume \(loweredVolume)") != nil
+        case .mute:
+            success = runAppleScript("set volume output volume 0") != nil &&
+                runAppleScript("set volume output muted true") != nil
+        }
+
+        guard success else {
             previousAudioState = nil
             throw NSError(domain: "SystemAudioMuteService", code: 2, userInfo: [
                 NSLocalizedDescriptionKey: "録音中ミュートを有効にできませんでした。"

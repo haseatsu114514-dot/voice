@@ -111,6 +111,36 @@ enum PolishTone: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum RecordingAudioControlMode: String, CaseIterable, Identifiable, Codable {
+    case unchanged
+    case duck
+    case mute
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .unchanged:
+            return "そのまま"
+        case .duck:
+            return "小さく"
+        case .mute:
+            return "ミュート"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .unchanged:
+            return "再生音をそのまま流す"
+        case .duck:
+            return "録音中だけ再生音を小さくする"
+        case .mute:
+            return "録音中だけ再生音を止める"
+        }
+    }
+}
+
 enum CaptureMode: String, CaseIterable, Identifiable, Codable {
     case fastRaw
     case aiPolish
