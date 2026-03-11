@@ -476,10 +476,15 @@ struct CaptureModeButton: View {
                 }
 
                 if controller.status.isProcessing && isSelected {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .tint(.white)
-                        .scaleEffect(compact ? 0.9 : 1.1)
+                    VStack(spacing: compact ? 4 : 6) {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(.white)
+                            .scaleEffect(compact ? 0.9 : 1.1)
+                        Text("中止")
+                            .font(.system(size: compact ? 10 : 14, weight: .heavy))
+                            .foregroundStyle(.white)
+                    }
                 } else {
                     VStack(spacing: 4) {
                         Image(systemName: captureMode.systemImage)
@@ -498,7 +503,6 @@ struct CaptureModeButton: View {
             }
         }
         .buttonStyle(.plain)
-        .disabled(controller.status.isProcessing)
     }
 }
 

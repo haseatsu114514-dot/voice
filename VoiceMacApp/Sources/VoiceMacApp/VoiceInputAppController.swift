@@ -45,6 +45,7 @@ final class VoiceInputAppController: ObservableObject {
     private var lastPasteTargetSelectionAt: Date?
     private var globalMouseMonitor: Any?
     private var localMouseMonitor: Any?
+    private var transcriptionTask: Task<Void, Never>?
 
     private enum PasteDeliveryResult {
         case success
@@ -303,9 +304,9 @@ final class VoiceInputAppController: ObservableObject {
             return "AIを使わず、通常入力として高速に文字へ変換します"
         case .processing:
             if selectedCaptureMode == .aiPolish {
-                return "文字起こしとAI整形を進めています。読み込み中にクリックした入力欄へ貼り付けます"
+                return "文字起こしとAI整形を進めています。もう一度押すと中止できます。読み込み中にクリックした入力欄へ貼り付けます"
             }
-            return "通常入力として文字起こししています。読み込み中にクリックした入力欄へ貼り付けます"
+            return "通常入力として文字起こししています。もう一度押すと中止できます。読み込み中にクリックした入力欄へ貼り付けます"
         case .error(let message):
             return message
         }
@@ -328,6 +329,10 @@ final class VoiceInputAppController: ObservableObject {
     }
 
     func toggleRecording() {
+        if status.isProcessing {
+            cancelProcessing()
+            return
+        }
         if recorder.isRecording {
             stopRecording(trigger: "manual")
             return
@@ -337,6 +342,10 @@ final class VoiceInputAppController: ObservableObject {
     }
 
     func handleCaptureButton(_ captureMode: CaptureMode) {
+        if status.isProcessing {
+            cancelProcessing()
+            return
+        }
         if recorder.isRecording {
             stopRecording(trigger: "manual")
             return
@@ -433,6 +442,21 @@ final class VoiceInputAppController: ObservableObject {
         }
     }
 
+    func cancelProcessing() {
+        transcriptionTask?.cancel()
+        transcriptionTask = nil
+        if status.isProcessing {
+            status = .idle
+        }
+        if errorMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            errorMessage = "変換を中止しました。"
+        }
+        audioLevels = Array(repeating: 0.08, count: 14)
+        activeCaptureMode = nil
+        processingTargetApplication = nil
+        lastPasteTargetSelectionAt = nil
+    }
+
     private func startRecording(captureMode: CaptureMode) {
         settings.defaultCaptureMode = .aiPolish
         activeCaptureMode = captureMode
@@ -495,13 +519,17 @@ final class VoiceInputAppController: ObservableObject {
             soundCuePlayer.playStopCue()
         }
 
-        Task {
+        transcriptionTask?.cancel()
+        transcriptionTask = Task {
             await transcribe(fileURL: result.url, duration: result.duration, trigger: trigger, captureMode: captureMode)
         }
     }
 
     private func transcribe(fileURL: URL, duration: TimeInterval, trigger: String, captureMode: CaptureMode) async {
-        defer { try? FileManager.default.removeItem(at: fileURL) }
+        defer {
+            try? FileManager.default.removeItem(at: fileURL)
+            transcriptionTask = nil
+        }
 
         do {
             let transcriptionMode = captureMode == .fastRaw ? AppMode.offline : settings.mode
@@ -512,12 +540,21 @@ final class VoiceInputAppController: ObservableObject {
             do {
                 baseText = try await transcribeBaseText(fileURL: fileURL, transcriptionMode: transcriptionMode)
             } catch {
+                if Task.isCancelled {
+                    finishCancelledProcessing()
+                    return
+                }
                 guard transcriptionMode != .offline else { throw error }
                 let localizedError = localized(error)
                 baseText = try offline.transcribeAudio(fileURL: fileURL)
                 usedOfflineFallback = true
                 warningMessage = "OpenAI変換がタイムアウトしたため、PC内変換に切り替えました。"
                 errorMessage = warningMessage ?? localizedError
+            }
+
+            if Task.isCancelled {
+                finishCancelledProcessing()
+                return
             }
 
             let normalized = normalize(baseText)
@@ -543,9 +580,18 @@ final class VoiceInputAppController: ObservableObject {
                     finalText = normalize(polished)
                     estimatedUSD += polisher.estimatedUSD(inputText: normalized, outputText: finalText)
                 } catch {
+                    if Task.isCancelled {
+                        finishCancelledProcessing()
+                        return
+                    }
                     finalText = normalized
                     warningMessage = "AI整形がタイムアウトしたため、文字起こし結果をそのまま使いました。"
                 }
+            }
+
+            if Task.isCancelled {
+                finishCancelledProcessing()
+                return
             }
 
             lastTranscript = finalText
@@ -558,6 +604,11 @@ final class VoiceInputAppController: ObservableObject {
                 pasteCompleted = await paste(text: finalText)
             } else {
                 pasteCompleted = false
+            }
+
+            if Task.isCancelled {
+                finishCancelledProcessing()
+                return
             }
             if !status.isError {
                 status = .idle
@@ -587,6 +638,10 @@ final class VoiceInputAppController: ObservableObject {
             )
             refreshMonthlyStats()
         } catch {
+            if Task.isCancelled || error is CancellationError {
+                finishCancelledProcessing()
+                return
+            }
             let localizedError = localized(error)
             status = .error(localizedError)
             errorMessage = localizedError
@@ -609,6 +664,19 @@ final class VoiceInputAppController: ObservableObject {
                 )
             )
             refreshMonthlyStats()
+        }
+    }
+
+    private func finishCancelledProcessing() {
+        audioLevels = Array(repeating: 0.08, count: 14)
+        activeCaptureMode = nil
+        processingTargetApplication = nil
+        lastPasteTargetSelectionAt = nil
+        if status.isProcessing {
+            status = .idle
+        }
+        if errorMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            errorMessage = "変換を中止しました。"
         }
     }
 
