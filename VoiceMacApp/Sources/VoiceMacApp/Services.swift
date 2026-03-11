@@ -9,6 +9,7 @@ final class SettingsStore: ObservableObject {
     @Published var mode: AppMode { didSet { save() } }
     @Published var recordShortcut: Shortcut { didSet { save() } }
     @Published var defaultCaptureMode: CaptureMode { didSet { save() } }
+    @Published var polishTone: PolishTone { didSet { save() } }
     @Published var interfaceMode: InterfaceMode { didSet { save() } }
     @Published var autoPaste: Bool { didSet { save() } }
     @Published var soundCuesEnabled: Bool { didSet { save() } }
@@ -42,6 +43,13 @@ final class SettingsStore: ObservableObject {
             self.defaultCaptureMode = .fastRaw
         }
 
+        if let polishToneRaw = defaults.string(forKey: "settings.polishTone"),
+           let savedPolishTone = PolishTone(rawValue: polishToneRaw) {
+            self.polishTone = savedPolishTone
+        } else {
+            self.polishTone = .standard
+        }
+
         if let interfaceModeRaw = defaults.string(forKey: "settings.interfaceMode"),
            let savedInterfaceMode = InterfaceMode(rawValue: interfaceModeRaw) {
             self.interfaceMode = savedInterfaceMode
@@ -61,6 +69,7 @@ final class SettingsStore: ObservableObject {
     private func save() {
         defaults.set(mode.rawValue, forKey: "settings.mode")
         defaults.set(defaultCaptureMode.rawValue, forKey: "settings.defaultCaptureMode")
+        defaults.set(polishTone.rawValue, forKey: "settings.polishTone")
         defaults.set(interfaceMode.rawValue, forKey: "settings.interfaceMode")
         defaults.set(autoPaste, forKey: "settings.autoPaste")
         defaults.set(soundCuesEnabled, forKey: "settings.soundCuesEnabled")
@@ -171,6 +180,9 @@ final class HistoryStore {
             .filter { calendar.isDate($0.timestamp, equalTo: referenceDate, toGranularity: .month) }
 
         let totalDurationSeconds = entries.reduce(0) { $0 + $1.durationSeconds }
+        let successfulDurationSeconds = entries
+            .filter(\.success)
+            .reduce(0) { $0 + $1.durationSeconds }
         let successfulSessions = entries.filter(\.success).count
         let failedSessions = entries.filter { !$0.success }.count
         let totalCharacters = entries
@@ -189,6 +201,7 @@ final class HistoryStore {
 
         return MonthlyUsageStats(
             totalDurationSeconds: totalDurationSeconds,
+            successfulDurationSeconds: successfulDurationSeconds,
             successfulSessions: successfulSessions,
             failedSessions: failedSessions,
             totalCharacters: totalCharacters,
@@ -392,7 +405,7 @@ struct OpenAITextPolishService {
         let choices: [Choice]
     }
 
-    func polishJapaneseText(_ text: String, apiKey: String) async throws -> String {
+    func polishJapaneseText(_ text: String, tone: PolishTone, apiKey: String) async throws -> String {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return text
         }
@@ -408,7 +421,7 @@ struct OpenAITextPolishService {
             "messages": [
                 [
                     "role": "system",
-                    "content": "あなたは日本語の音声入力補正アシスタントです。元の意味を変えず、情報を足さず、句読点や文のつながりを自然に整えてください。出力は整えた本文だけにしてください。"
+                    "content": systemPrompt(for: tone)
                 ],
                 [
                     "role": "user",
@@ -441,6 +454,15 @@ struct OpenAITextPolishService {
         }
 
         return content
+    }
+
+    private func systemPrompt(for tone: PolishTone) -> String {
+        switch tone {
+        case .standard:
+            return "あなたは日本語の音声入力補正アシスタントです。元の意味を変えず、情報を足さず、句読点や文のつながりを自然に整えてください。出力は整えた本文だけにしてください。"
+        case .friendly:
+            return "あなたは日本語の音声入力補正アシスタントです。元の意味を変えず、情報を足さず、友達との会話のような自然なタメ口に整えてください。硬すぎる表現は避け、読みやすくしてください。出力は整えた本文だけにしてください。"
+        }
     }
 
     func estimatedUSD(inputText: String, outputText: String) -> Double {

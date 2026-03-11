@@ -88,13 +88,26 @@ struct StandardMicView: View {
                     .help("小型モードに切り替え")
                 }
 
-                CaptureModeButton(
-                    controller: controller,
-                    captureMode: .aiPolish,
-                    compact: false
-                )
+                HStack(spacing: 10) {
+                    CaptureModeButton(
+                        controller: controller,
+                        captureMode: .aiPolish,
+                        compact: false
+                    )
+                    ShortcutActionCard(
+                        shortcut: controller.settings.recordShortcut.displayString,
+                        tone: controller.settings.polishTone.title
+                    )
+                }
 
-                Text("このボタンか録音キーで、AI整形の音声入力を開始できます")
+                Picker("AI文体", selection: $controller.settings.polishTone) {
+                    ForEach(PolishTone.allCases) { tone in
+                        Text(tone.title).tag(tone)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text("通常は自然な文章、会話は友達向けのタメ口です")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
 
@@ -223,6 +236,10 @@ struct CompactMicView: View {
                 compact: true
             )
 
+            Text(controller.settings.recordShortcut.displayString + " / " + controller.settings.polishTone.title)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
+
             WaveformView(
                 levels: controller.audioLevels,
                 tint: controller.statusColor,
@@ -253,7 +270,7 @@ struct CompactMicView: View {
                     Text(controller.inlineErrorText)
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.red)
-                        .lineLimit(1)
+                        .lineLimit(2)
                 }
             }
             .multilineTextAlignment(.center)
@@ -345,6 +362,33 @@ struct CostChip: View {
     }
 }
 
+struct ShortcutActionCard: View {
+    let shortcut: String
+    let tone: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("録音キー", systemImage: "keyboard")
+                .font(.system(size: 11, weight: .semibold))
+            Text(shortcut)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+            Text(tone)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: 102, height: 98, alignment: .topLeading)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color.white.opacity(0.72))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.white.opacity(0.65), lineWidth: 1)
+        )
+    }
+}
+
 struct OneLineErrorBanner: View {
     let text: String
 
@@ -354,7 +398,7 @@ struct OneLineErrorBanner: View {
                 .font(.system(size: 11, weight: .bold))
             Text(text)
                 .font(.system(size: 11, weight: .medium))
-                .lineLimit(1)
+                .lineLimit(2)
         }
         .foregroundStyle(.red)
         .padding(.horizontal, 10)
@@ -780,6 +824,12 @@ struct SettingsView: View {
                         Text("録音キーでも AIで整える が起動します。")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
+                        Picker("AI文体", selection: $controller.settings.polishTone) {
+                            ForEach(PolishTone.allCases) { tone in
+                                Text(tone.title).tag(tone)
+                            }
+                        }
+                        .pickerStyle(.segmented)
                         Picker("表示サイズ", selection: $controller.settings.interfaceMode) {
                             ForEach(InterfaceMode.allCases) { mode in
                                 Text(mode.title).tag(mode)

@@ -86,6 +86,31 @@ enum InterfaceMode: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum PolishTone: String, CaseIterable, Identifiable, Codable {
+    case standard
+    case friendly
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .standard:
+            return "通常"
+        case .friendly:
+            return "会話"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .standard:
+            return "読みやすく自然"
+        case .friendly:
+            return "友達向けのタメ口"
+        }
+    }
+}
+
 enum CaptureMode: String, CaseIterable, Identifiable, Codable {
     case fastRaw
     case aiPolish
@@ -176,6 +201,7 @@ enum RecorderStatus: Equatable {
 
 struct MonthlyUsageStats {
     let totalDurationSeconds: Double
+    let successfulDurationSeconds: Double
     let successfulSessions: Int
     let failedSessions: Int
     let totalCharacters: Int
@@ -183,6 +209,7 @@ struct MonthlyUsageStats {
 
     static let empty = MonthlyUsageStats(
         totalDurationSeconds: 0,
+        successfulDurationSeconds: 0,
         successfulSessions: 0,
         failedSessions: 0,
         totalCharacters: 0,

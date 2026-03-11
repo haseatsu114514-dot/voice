@@ -127,7 +127,7 @@ final class VoiceInputAppController: ObservableObject {
     }
 
     var savedTimeSeconds: Double {
-        max(0, estimatedManualTypingSeconds - monthlyStats.totalDurationSeconds)
+        max(0, estimatedManualTypingSeconds - monthlyStats.successfulDurationSeconds)
     }
 
     var savedTimeText: String {
@@ -440,7 +440,11 @@ final class VoiceInputAppController: ObservableObject {
                         NSLocalizedDescriptionKey: "AI整形にはOpenAI APIキーが必要です。"
                     ])
                 }
-                let polished = try await polisher.polishJapaneseText(normalized, apiKey: key)
+                let polished = try await polisher.polishJapaneseText(
+                    normalized,
+                    tone: settings.polishTone,
+                    apiKey: key
+                )
                 finalText = normalize(polished)
                 estimatedUSD += polisher.estimatedUSD(inputText: normalized, outputText: finalText)
             }
