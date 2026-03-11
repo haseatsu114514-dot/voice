@@ -528,33 +528,125 @@ final class VoiceInputAppController: ObservableObject {
         NSPasteboard.general.setString(text, forType: .string)
 
         guard AXIsProcessTrusted() else {
+            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
             status = .error("自動貼り付けにはアクセシビリティ権限が必要です。")
-            errorMessage = "システム設定 > プライバシーとセキュリティ > アクセシビリティ で Voice Input.app を許可してください。"
+            errorMessage = "アクセシビリティを許可したあと、Voice Input.app を一度開き直してください。"
             return
         }
 
-        let targetApplication = resolvedPasteTargetApplication()
-        targetApplication?.activate(options: [.activateIgnoringOtherApps])
+        if errorMessage.contains("アクセシビリティ") {
+            errorMessage = ""
+        }
+
+        guard let targetApplication = resolvedPasteTargetApplication() else {
+            status = .error("貼り付け先が見つかりませんでした。")
+            errorMessage = "貼り付け先が見つかりませんでした。原因: 戻る先のアプリや入力欄が見つかっていません。先に貼り付けたいアプリを開いてください。"
+            return
+        }
+
+        _ = targetApplication.unhide()
+        _ = targetApplication.activate(options: [.activateIgnoringOtherApps])
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
-            self?.postCommandV()
+            guard let self else { return }
+
+            if let targetIssue = self.invalidPasteTargetMessage(for: targetApplication) {
+                self.status = .error("貼り付け先に入力欄がありません。")
+                self.errorMessage = targetIssue
+                return
+            }
+
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier != targetApplication.processIdentifier {
+                _ = targetApplication.activate(options: [.activateIgnoringOtherApps])
+            }
+
+            guard self.postCommandV(to: targetApplication.processIdentifier) || self.postCommandV() else {
+                self.status = .error("貼り付け操作に失敗しました。")
+                self.errorMessage = "貼り付け操作に失敗しました。原因: macOSが貼り付けキー送信を受け付けませんでした。"
+                return
+            }
+
+            self.errorMessage = ""
         }
     }
 
-    private func postCommandV() {
-        let source = CGEventSource(stateID: .hidSystemState)
+    private func postCommandV(to pid: pid_t? = nil) -> Bool {
+        let source = CGEventSource(stateID: .combinedSessionState)
         let commandDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
-        commandDown?.flags = .maskCommand
         let vDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
         vDown?.flags = .maskCommand
         let vUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
         vUp?.flags = .maskCommand
         let commandUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
 
-        commandDown?.post(tap: .cghidEventTap)
-        vDown?.post(tap: .cghidEventTap)
-        vUp?.post(tap: .cghidEventTap)
-        commandUp?.post(tap: .cghidEventTap)
+        guard let commandDown,
+              let vDown,
+              let vUp,
+              let commandUp else {
+            return false
+        }
+
+        if let pid {
+            commandDown.postToPid(pid)
+            usleep(12000)
+            vDown.postToPid(pid)
+            usleep(12000)
+            vUp.postToPid(pid)
+            usleep(12000)
+            commandUp.postToPid(pid)
+        } else {
+            commandDown.post(tap: .cghidEventTap)
+            usleep(12000)
+            vDown.post(tap: .cghidEventTap)
+            usleep(12000)
+            vUp.post(tap: .cghidEventTap)
+            usleep(12000)
+            commandUp.post(tap: .cghidEventTap)
+        }
+        return true
+    }
+
+    private func invalidPasteTargetMessage(for application: NSRunningApplication) -> String? {
+        let appElement = AXUIElementCreateApplication(application.processIdentifier)
+        var focusedValue: CFTypeRef?
+        let focusedResult = AXUIElementCopyAttributeValue(
+            appElement,
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedValue
+        )
+
+        guard focusedResult == .success,
+              let focusedElement = focusedValue else {
+            return "貼り付け先に入力欄がありません。原因: 今開いている画面では文字入力できません。メモやチャット欄を選んでから使ってください。"
+        }
+
+        let element = focusedElement as! AXUIElement
+        var isValueSettable = DarwinBoolean(false)
+        let valueResult = AXUIElementIsAttributeSettable(
+            element,
+            kAXValueAttribute as CFString,
+            &isValueSettable
+        )
+
+        if valueResult == .success && isValueSettable.boolValue {
+            return nil
+        }
+
+        let allowedRoles: Set<String> = ["AXTextField", "AXTextArea", "AXSearchField", "AXComboBox"]
+        let role = stringAttribute(kAXRoleAttribute as CFString, from: element) ?? ""
+        if allowedRoles.contains(role) {
+            return nil
+        }
+
+        return "貼り付け先に入力欄がありません。原因: 今開いている画面では文字入力できません。メモやチャット欄を選んでから使ってください。"
+    }
+
+    private func stringAttribute(_ attribute: CFString, from element: AXUIElement) -> String? {
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(element, attribute, &value)
+        guard result == .success else { return nil }
+        return value as? String
     }
 
     private func resolvedPasteTargetApplication() -> NSRunningApplication? {
