@@ -705,7 +705,7 @@ struct WaveformView: View {
                                     .blur(radius: 0.2)
                             }
                         }
-                        .frame(width: isLatest ? 8 : 6, height: max(8, 8 + CGFloat(level) * 30))
+                        .frame(width: isLatest ? 8 : 6, height: max(10, 10 + CGFloat(level) * 40))
                         .shadow(color: tint.opacity(isActive ? 0.28 : 0.10), radius: 5, y: 1)
                         .animation(.easeOut(duration: 0.1), value: level)
                 }
@@ -880,6 +880,32 @@ struct SettingsView: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("音声認識モデル")
+                                .font(.system(size: 11, weight: .semibold))
+                            Picker("音声認識モデル", selection: $controller.settings.mode) {
+                                ForEach(AppMode.allCases) { mode in
+                                    Text(mode.title).tag(mode)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            Text("現在: \(controller.settings.mode.modelDisplayName) / \(controller.settings.mode.subtitle)")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("録音中の再生音")
+                                .font(.system(size: 11, weight: .semibold))
+                            Picker("録音中の再生音", selection: $controller.settings.recordingAudioControlMode) {
+                                ForEach(RecordingAudioControlMode.allCases) { mode in
+                                    Text(mode.title).tag(mode)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            Text("現在: \(controller.settings.recordingAudioControlMode.subtitle)")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
                         Picker("表示サイズ", selection: $controller.settings.interfaceMode) {
                             ForEach(InterfaceMode.allCases) { mode in
                                 Text(mode.title).tag(mode)
@@ -893,35 +919,8 @@ struct SettingsView: View {
 
                 DisclosureGroup("詳細設定", isExpanded: $showingAdvancedSettings) {
                     VStack(alignment: .leading, spacing: 14) {
-                        GroupBox("文字起こしモード") {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Picker("モード", selection: $controller.settings.mode) {
-                                    ForEach(AppMode.allCases) { mode in
-                                        Text(mode.title).tag(mode)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                                Text("オフラインはPC内で処理、標準と高精度はOpenAI APIを使います。")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
                         GroupBox("録音の細かい動作") {
                             VStack(alignment: .leading, spacing: 10) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("録音中の再生音")
-                                        .font(.system(size: 11, weight: .semibold))
-                                    Picker("録音中の再生音", selection: $controller.settings.recordingAudioControlMode) {
-                                        ForEach(RecordingAudioControlMode.allCases) { mode in
-                                            Text(mode.title).tag(mode)
-                                        }
-                                    }
-                                    .pickerStyle(.segmented)
-                                    Text(controller.settings.recordingAudioControlMode.subtitle)
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.secondary)
-                                }
                                 Toggle("開始音と終了音を鳴らす", isOn: $controller.settings.soundCuesEnabled)
                                 Toggle("フィラーを自動で減らす", isOn: $controller.settings.fillerRemoval)
                                 Toggle("無音で自動停止する", isOn: $controller.settings.autoStopEnabled)

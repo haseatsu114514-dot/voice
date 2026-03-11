@@ -337,7 +337,7 @@ final class RecorderService: NSObject, AVAudioRecorderDelegate {
         let power = recorder.averagePower(forChannel: 0)
         let now = Date()
         let rawLevel = max(0, min(1, (power + 52) / 52))
-        let normalizedPower = max(0.02, min(0.62, pow(rawLevel, 1.9) * 0.62))
+        let normalizedPower = max(0.03, min(0.82, pow(rawLevel, 1.55) * 0.82))
         let elapsed = now.timeIntervalSince(recordStart ?? now)
         onLevelUpdate?(normalizedPower, elapsed)
         if power > -45 {

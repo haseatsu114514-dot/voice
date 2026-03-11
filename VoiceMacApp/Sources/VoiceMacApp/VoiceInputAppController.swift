@@ -635,8 +635,8 @@ final class VoiceInputAppController: ObservableObject {
         }
 
         guard let initialTargetApplication = resolvedPasteTargetApplication() else {
-            status = .error("貼り付け先が見つかりませんでした。")
-            errorMessage = "貼り付け先が見つかりませんでした。原因: 戻る先のアプリや入力欄が見つかっていません。先に貼り付けたいアプリを開いてください。"
+            status = .error("貼り付け対象がありません。")
+            errorMessage = "貼り付け対象がありません。原因: 戻る先のアプリや入力欄が見つかっていません。貼り付けたい欄を先にクリックしてください。"
             return false
         }
 
@@ -663,7 +663,7 @@ final class VoiceInputAppController: ObservableObject {
                 return true
             case .noEditableTarget(let message):
                 if attempt == 3 {
-                    status = .error("貼り付け先に入力欄がありません。")
+                    status = .error("貼り付け対象に入力欄がありません。")
                     errorMessage = message
                     return false
                 }
@@ -688,7 +688,7 @@ final class VoiceInputAppController: ObservableObject {
     private func insertTextDirectly(_ text: String, into application: NSRunningApplication) -> PasteDeliveryResult {
         guard let focusedElement = focusedElement(for: application) else {
             return .noEditableTarget(
-                "貼り付け先に入力欄がありません。原因: 入力欄が選ばれていません。貼り付けたい欄を一度クリックしてから使ってください。"
+                "貼り付け対象に入力欄がありません。原因: 入力欄が選ばれていません。貼り付けたい欄を一度クリックしてから使ってください。"
             )
         }
 
@@ -707,7 +707,7 @@ final class VoiceInputAppController: ObservableObject {
         }
 
         return .noEditableTarget(
-            "貼り付け先に入力欄がありません。原因: 今開いている場所は文字入力できない画面です。メモやチャット欄を選んでから使ってください。"
+            "貼り付け対象に入力欄がありません。原因: 今開いている場所は文字入力できない画面です。メモやチャット欄を選んでから使ってください。"
         )
     }
 
@@ -901,7 +901,7 @@ final class VoiceInputAppController: ObservableObject {
     }
 
     private func pushAudioLevel(_ level: Double) {
-        let normalized = max(0.02, min(0.68, level * 0.72))
+        let normalized = max(0.03, min(0.86, level * 0.92))
         if audioLevels.count >= 14 {
             audioLevels.removeFirst()
         }

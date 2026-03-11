@@ -12,11 +12,33 @@ enum AppMode: String, CaseIterable, Identifiable, Codable {
     var title: String {
         switch self {
         case .offline:
-            return "オフライン"
+            return "PC内"
         case .balanced:
-            return "標準"
+            return "4o mini"
         case .best:
-            return "高精度"
+            return "4o"
+        }
+    }
+
+    var modelDisplayName: String {
+        switch self {
+        case .offline:
+            return "faster-whisper"
+        case .balanced:
+            return "gpt-4o-mini-transcribe"
+        case .best:
+            return "gpt-4o-transcribe"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .offline:
+            return "PC内で処理。通信なし"
+        case .balanced:
+            return "安めで速い OpenAI"
+        case .best:
+            return "精度重視の OpenAI"
         }
     }
 
