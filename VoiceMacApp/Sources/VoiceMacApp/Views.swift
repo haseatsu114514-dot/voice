@@ -75,6 +75,9 @@ struct StandardMicView: View {
                         Text("\(controller.typingBenchmarkText) / \(controller.savingsSummaryText)")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.secondary)
+                        Text(controller.dailySavingsSummaryText)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
                     }
 
                     Spacer()
@@ -165,6 +168,9 @@ struct StandardMicView: View {
                         Text(controller.savingsSummaryText)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.secondary)
+                        Text(controller.dailySavingsSummaryText)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
 
                         if !controller.hasSavedAPIKey {
                             Text("この音声入力を使う前に、設定で APIキー を保存します。")
@@ -235,6 +241,9 @@ struct CompactMicView: View {
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Text(controller.savingsSummaryText)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(controller.dailySavingsSummaryText)
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Text(controller.monthlyStats.shortSummaryText)
@@ -817,7 +826,7 @@ struct SettingsView: View {
                             UsagePanel(
                                 metrics: controller.monthUsageDetails,
                                 summary: controller.monthlyEstimateText,
-                                benchmark: "\(controller.typingBenchmarkText) / \(controller.savingsSummaryText)"
+                                benchmark: "\(controller.typingBenchmarkText) / \(controller.savingsSummaryText) / \(controller.dailySavingsSummaryText)"
                             )
                                 .padding(.top, 8)
                         }

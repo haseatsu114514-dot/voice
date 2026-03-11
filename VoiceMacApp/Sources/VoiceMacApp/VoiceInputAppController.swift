@@ -134,12 +134,28 @@ final class VoiceInputAppController: ObservableObject {
         formatDuration(savedTimeSeconds)
     }
 
+    var elapsedMonthDays: Int {
+        max(1, Calendar.current.component(.day, from: Date()))
+    }
+
+    var dailySavedTimeSeconds: Double {
+        savedTimeSeconds / Double(elapsedMonthDays)
+    }
+
+    var dailySavedTimeText: String {
+        formatDuration(dailySavedTimeSeconds)
+    }
+
     var manualTypingTimeText: String {
         formatDuration(estimatedManualTypingSeconds)
     }
 
     var savingsSummaryText: String {
         "今月 \(savedTimeText) 短縮"
+    }
+
+    var dailySavingsSummaryText: String {
+        "1日あたり \(dailySavedTimeText)"
     }
 
     var typingBenchmarkText: String {
@@ -251,6 +267,7 @@ final class VoiceInputAppController: ObservableObject {
             UsageMetric(title: "録音時間", value: monthlyStats.durationText),
             UsageMetric(title: "手打ち換算", value: manualTypingTimeText),
             UsageMetric(title: "節約時間", value: savedTimeText),
+            UsageMetric(title: "1日あたり", value: dailySavedTimeText),
             UsageMetric(title: "成功回数", value: "\(monthlyStats.successfulSessions)回"),
             UsageMetric(title: "文字数", value: "\(monthlyStats.totalCharacters)字"),
             UsageMetric(title: "概算費用", value: "\(estimatedMonthlyJPY)円")
