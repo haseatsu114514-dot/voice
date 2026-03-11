@@ -8,6 +8,6 @@ struct VoiceInputMacApp: App {
         WindowGroup {
             MainMicView(controller: controller)
         }
-        .windowResizability(.contentSize)
+        .windowResizability(.automatic)
     }
 }

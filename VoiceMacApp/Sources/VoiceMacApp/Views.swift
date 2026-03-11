@@ -14,7 +14,12 @@ struct MainMicView: View {
                 CompactMicView(controller: controller)
             }
         }
-        .frame(width: windowSize.width, height: windowSize.height)
+        .frame(
+            minWidth: windowSize.width,
+            idealWidth: windowSize.width,
+            minHeight: windowSize.height,
+            idealHeight: windowSize.height
+        )
         .background(
             WindowAccessor(
                 alwaysOnTop: controller.settings.alwaysOnTop,
@@ -31,121 +36,124 @@ struct StandardMicView: View {
     @ObservedObject var controller: VoiceInputAppController
 
     var body: some View {
-        VStack(spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
+        ScrollView {
+            VStack(spacing: 14) {
                 HStack(alignment: .top, spacing: 12) {
-                    AppHeroBadge()
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("日本語音声入力")
-                            .font(.system(size: 24, weight: .bold))
-                        Text("話した内容を、そのまま文字にするか、AIで整えて貼り付けるアプリです")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 8) {
-                    HeaderSettingsButton {
-                        controller.showingSettings = true
-                    }
-                    StatusBadge(
-                        title: controller.apiSetupStatusText,
-                        tint: controller.hasSavedAPIKey ? Color.green : Color.orange
-                    )
-                }
-            }
-
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 6) {
-                    ShortcutChip(text: controller.currentShortcutText)
-                    Text("起動方法: 下の「そのまま」か「AIで整える」を押します")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                SmallIconButton(systemImage: "rectangle.compress.vertical") {
-                    controller.toggleInterfaceMode()
-                }
-                .help("小型モードに切り替え")
-            }
-
-            SetupGuidePanel(controller: controller)
-            StatusCard(controller: controller)
-
-            HStack(spacing: 10) {
-                ForEach(CaptureMode.allCases) { captureMode in
-                    CaptureModeButton(
-                        controller: controller,
-                        captureMode: captureMode,
-                        compact: false
-                    )
-                }
-            }
-
-            GlassPanel {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text(controller.status.isListening ? "録音の波形" : "入力レベル")
-                            .font(.system(size: 13, weight: .semibold))
-                        Spacer()
-                        if controller.status.isListening {
-                            Text(controller.recordingElapsedText)
-                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    HStack(alignment: .top, spacing: 12) {
+                        AppHeroBadge()
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("日本語音声入力")
+                                .font(.system(size: 24, weight: .bold))
+                            Text("話した内容を、そのまま文字にするか、AIで整えて貼り付けるアプリです")
+                                .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(.secondary)
                         }
                     }
 
-                    WaveformView(
-                        levels: controller.audioLevels,
-                        tint: controller.statusColor,
-                        isActive: controller.status.isListening
-                    )
-                    .frame(height: 42)
+                    Spacer()
 
-                    Text(controller.statusDetailText)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            GlassPanel {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("直前の文字起こし")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text(controller.lastTranscript.isEmpty ? "ここに最後の文字起こし結果が表示されます" : controller.lastTranscript)
-                        .font(.system(size: 12))
-                        .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
-                        .padding(12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color.black.opacity(0.05))
+                    VStack(alignment: .trailing, spacing: 8) {
+                        HeaderSettingsButton {
+                            controller.showingSettings = true
+                        }
+                        StatusBadge(
+                            title: controller.apiSetupStatusText,
+                            tint: controller.hasSavedAPIKey ? Color.green : Color.orange
                         )
-                }
-            }
-
-            UsagePanel(metrics: controller.monthUsageDetails, summary: controller.monthlyEstimateText)
-
-            VStack(spacing: 10) {
-                HStack(spacing: 10) {
-                    ActionButton(title: "前回を貼る", systemImage: "arrowshape.turn.up.right.fill", action: controller.pasteLastTranscript)
-                    ActionButton(title: "前回をコピー", systemImage: "doc.on.doc.fill", action: controller.copyLastTranscript)
+                    }
                 }
 
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ShortcutChip(text: controller.currentShortcutText)
+                        Text("起動方法: 下の「そのまま」か「AIで整える」を押します")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    SmallIconButton(systemImage: "rectangle.compress.vertical") {
+                        controller.toggleInterfaceMode()
+                    }
+                    .help("小型モードに切り替え")
+                }
+
+                SetupGuidePanel(controller: controller)
+                StatusCard(controller: controller)
+
                 HStack(spacing: 10) {
-                    ActionButton(title: "履歴を開く", systemImage: "folder.fill", action: controller.openHistory)
-                    ActionButton(title: "設定", systemImage: "slider.horizontal.3") {
-                        controller.showingSettings = true
+                    ForEach(CaptureMode.allCases) { captureMode in
+                        CaptureModeButton(
+                            controller: controller,
+                            captureMode: captureMode,
+                            compact: false
+                        )
+                    }
+                }
+
+                GlassPanel {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text(controller.status.isListening ? "録音の波形" : "入力レベル")
+                                .font(.system(size: 13, weight: .semibold))
+                            Spacer()
+                            if controller.status.isListening {
+                                Text(controller.recordingElapsedText)
+                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        WaveformView(
+                            levels: controller.audioLevels,
+                            tint: controller.statusColor,
+                            isActive: controller.status.isListening
+                        )
+                        .frame(height: 42)
+
+                        Text(controller.statusDetailText)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                GlassPanel {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("直前の文字起こし")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(controller.lastTranscript.isEmpty ? "ここに最後の文字起こし結果が表示されます" : controller.lastTranscript)
+                            .font(.system(size: 12))
+                            .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color.black.opacity(0.05))
+                            )
+                    }
+                }
+
+                UsagePanel(metrics: controller.monthUsageDetails, summary: controller.monthlyEstimateText)
+
+                VStack(spacing: 10) {
+                    HStack(spacing: 10) {
+                        ActionButton(title: "前回を貼る", systemImage: "arrowshape.turn.up.right.fill", action: controller.pasteLastTranscript)
+                        ActionButton(title: "前回をコピー", systemImage: "doc.on.doc.fill", action: controller.copyLastTranscript)
+                    }
+
+                    HStack(spacing: 10) {
+                        ActionButton(title: "履歴を開く", systemImage: "folder.fill", action: controller.openHistory)
+                        ActionButton(title: "設定", systemImage: "slider.horizontal.3") {
+                            controller.showingSettings = true
+                        }
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 44)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 18)
         }
-        .padding(.top, 44)
-        .padding(.horizontal, 18)
-        .padding(.bottom, 18)
         .background(WindowBackground())
     }
 }
@@ -575,123 +583,126 @@ struct SettingsView: View {
     @State private var capturingShortcut = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("設定")
-                        .font(.system(size: 24, weight: .bold))
-                    Text(controller.currentShortcutText)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("閉じる") {
-                    controller.showingSettings = false
-                }
-            }
-
-            GroupBox("文字起こしモード") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Picker("モード", selection: $controller.settings.mode) {
-                        ForEach(AppMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
-                        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("設定")
+                            .font(.system(size: 24, weight: .bold))
+                        Text(controller.currentShortcutText)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
                     }
-                    .pickerStyle(.segmented)
-
-                    Text("オフラインはPC内で処理、標準と高精度はOpenAI APIを使います。")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            GroupBox("録音ボタン") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Picker("通常の録音ボタン", selection: $controller.settings.defaultCaptureMode) {
-                        ForEach(CaptureMode.allCases) { captureMode in
-                            Text(captureMode.title).tag(captureMode)
-                        }
+                    Spacer()
+                    Button("閉じる") {
+                        controller.showingSettings = false
                     }
-                    .pickerStyle(.segmented)
-                    Text("ショートカットで開始するときは、このモードが使われます。")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
                 }
-            }
 
-            GroupBox("OpenAI API") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(controller.hasSavedAPIKey ? "現在: APIキー設定済み" : "現在: APIキー未設定")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(controller.hasSavedAPIKey ? .green : .orange)
-                    SecureField("sk-...", text: $controller.apiKeyDraft)
-                    HStack {
-                        Button("APIキーを保存") {
-                            controller.saveAPIKey()
+                GroupBox("文字起こしモード") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Picker("モード", selection: $controller.settings.mode) {
+                            ForEach(AppMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
                         }
-                        Button("接続テスト") {
-                            controller.testConnection()
-                        }
-                    }
-                    if !controller.apiConnectionMessage.isEmpty {
-                        Text(controller.apiConnectionMessage)
+                        .pickerStyle(.segmented)
+
+                        Text("オフラインはPC内で処理、標準と高精度はOpenAI APIを使います。")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
                 }
-            }
 
-            GroupBox("録音ショートカット") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("現在: \(controller.settings.recordShortcut.displayString)")
-                    Text("このキーで録音開始と停止を切り替えます。")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                    Button(capturingShortcut ? "今、キーを押してください..." : "ショートカットを変更") {
-                        capturingShortcut = true
-                    }
-                    if capturingShortcut {
-                        ShortcutCaptureRepresentable { shortcut in
-                            controller.updateRecordShortcut(shortcut)
-                            capturingShortcut = false
+                GroupBox("録音ボタン") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Picker("通常の録音ボタン", selection: $controller.settings.defaultCaptureMode) {
+                            ForEach(CaptureMode.allCases) { captureMode in
+                                Text(captureMode.title).tag(captureMode)
+                            }
                         }
-                        .frame(height: 44)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(0.08)))
+                        .pickerStyle(.segmented)
+                        Text("ショートカットで開始するときは、このモードが使われます。")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
                     }
                 }
-            }
 
-            GroupBox("表示") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Picker("表示サイズ", selection: $controller.settings.interfaceMode) {
-                        ForEach(InterfaceMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
+                GroupBox("OpenAI API") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(controller.hasSavedAPIKey ? "現在: APIキー設定済み" : "現在: APIキー未設定")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(controller.hasSavedAPIKey ? .green : .orange)
+                        SecureField("sk-...", text: $controller.apiKeyDraft)
+                        HStack {
+                            Button("APIキーを保存") {
+                                controller.saveAPIKey()
+                            }
+                            Button("接続テスト") {
+                                controller.testConnection()
+                            }
+                        }
+                        if !controller.apiConnectionMessage.isEmpty {
+                            Text(controller.apiConnectionMessage)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    .pickerStyle(.segmented)
-                    Toggle("常に手前に表示", isOn: $controller.settings.alwaysOnTop)
                 }
-            }
 
-            GroupBox("動作") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Toggle("文字起こし後に自動で貼り付ける", isOn: $controller.settings.autoPaste)
-                    Toggle("開始音と終了音を鳴らす", isOn: $controller.settings.soundCuesEnabled)
-                    Toggle("フィラーを自動で減らす", isOn: $controller.settings.fillerRemoval)
-                    Toggle("無音で自動停止する", isOn: $controller.settings.autoStopEnabled)
-                    HStack {
-                        Text("無音で止めるまで")
-                        Slider(value: $controller.settings.autoStopSeconds, in: 0.8...3.0, step: 0.1)
-                        Text(String(format: "%.1f秒", controller.settings.autoStopSeconds))
-                            .frame(width: 52)
+                GroupBox("録音ショートカット") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("現在: \(controller.settings.recordShortcut.displayString)")
+                        Text("このキーで録音開始と停止を切り替えます。")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        Button(capturingShortcut ? "今、キーを押してください..." : "ショートカットを変更") {
+                            capturingShortcut = true
+                        }
+                        if capturingShortcut {
+                            ShortcutCaptureRepresentable { shortcut in
+                                controller.updateRecordShortcut(shortcut)
+                                capturingShortcut = false
+                            }
+                            .frame(height: 44)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(0.08)))
+                        }
                     }
                 }
-            }
 
-            UsagePanel(metrics: controller.monthUsageDetails, summary: controller.monthlyEstimateText)
+                GroupBox("表示") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Picker("表示サイズ", selection: $controller.settings.interfaceMode) {
+                            ForEach(InterfaceMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        Toggle("常に手前に表示", isOn: $controller.settings.alwaysOnTop)
+                    }
+                }
+
+                GroupBox("動作") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle("文字起こし後に自動で貼り付ける", isOn: $controller.settings.autoPaste)
+                        Toggle("開始音と終了音を鳴らす", isOn: $controller.settings.soundCuesEnabled)
+                        Toggle("フィラーを自動で減らす", isOn: $controller.settings.fillerRemoval)
+                        Toggle("無音で自動停止する", isOn: $controller.settings.autoStopEnabled)
+                        HStack {
+                            Text("無音で止めるまで")
+                            Slider(value: $controller.settings.autoStopSeconds, in: 0.8...3.0, step: 0.1)
+                            Text(String(format: "%.1f秒", controller.settings.autoStopSeconds))
+                                .frame(width: 52)
+                        }
+                    }
+                }
+
+                UsagePanel(metrics: controller.monthUsageDetails, summary: controller.monthlyEstimateText)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(24)
-        .frame(width: 560)
+        .frame(width: 560, height: 720)
     }
 }
 
@@ -763,6 +774,9 @@ struct WindowAccessor: NSViewRepresentable {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
-        window.setContentSize(windowSize)
+        window.minSize = windowSize
+        if window.frame.size.width < windowSize.width || window.frame.size.height < windowSize.height {
+            window.setContentSize(windowSize)
+        }
     }
 }
