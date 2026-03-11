@@ -5,6 +5,31 @@ import Combine
 import Foundation
 import Security
 
+struct AccessibilityPermissionChecker {
+    static func systemWideUIAccessEnabled() -> Bool {
+        let process = Process()
+        let outputPipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", "tell application \"System Events\" to get UI elements enabled"]
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return false
+        }
+
+        guard process.terminationStatus == 0 else { return false }
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return output == "true"
+    }
+}
+
 final class SettingsStore: ObservableObject {
     @Published var mode: AppMode { didSet { save() } }
     @Published var recordShortcut: Shortcut { didSet { save() } }
@@ -311,7 +336,8 @@ final class RecorderService: NSObject, AVAudioRecorderDelegate {
         recorder.updateMeters()
         let power = recorder.averagePower(forChannel: 0)
         let now = Date()
-        let normalizedPower = max(0.06, min(1.0, (power + 52) / 52))
+        let rawLevel = max(0, min(1, (power + 52) / 52))
+        let normalizedPower = max(0.02, min(0.62, pow(rawLevel, 1.9) * 0.62))
         let elapsed = now.timeIntervalSince(recordStart ?? now)
         onLevelUpdate?(normalizedPower, elapsed)
         if power > -45 {

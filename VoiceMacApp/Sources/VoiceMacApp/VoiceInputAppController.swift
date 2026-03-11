@@ -25,6 +25,8 @@ final class VoiceInputAppController: ObservableObject {
     @Published var recordingElapsedSeconds: TimeInterval = 0
     @Published var monthlyStats: MonthlyUsageStats = .empty
     @Published var activeCaptureMode: CaptureMode? = nil
+    @Published var accessibilityTrusted: Bool = AXIsProcessTrusted()
+    @Published var accessibilityNeedsRepair: Bool = false
 
     var settings: SettingsStore
 
@@ -39,6 +41,7 @@ final class VoiceInputAppController: ObservableObject {
     private let typingBenchmark = TypingBenchmark.sushiDaAverage
     private var cancellables: Set<AnyCancellable> = []
     private var lastExternalApplication: NSRunningApplication?
+    private var processingTargetApplication: NSRunningApplication?
 
     private enum PasteDeliveryResult {
         case success
@@ -52,6 +55,7 @@ final class VoiceInputAppController: ObservableObject {
         self.apiKeyDraft = keychain.load()
         self.apiConnectionState = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .missing : .saved
         self.monthlyStats = historyStore.currentMonthStats()
+        refreshAccessibilityStatus()
 
         settings.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -62,6 +66,11 @@ final class VoiceInputAppController: ObservableObject {
             .compactMap { $0.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication }
             .sink { [weak self] application in
                 self?.rememberExternalApplicationIfNeeded(application)
+                guard let self,
+                      application.bundleIdentifier != Bundle.main.bundleIdentifier else { return }
+                if self.status.isProcessing {
+                    self.processingTargetApplication = application
+                }
             }
             .store(in: &cancellables)
 
@@ -172,6 +181,23 @@ final class VoiceInputAppController: ObservableObject {
         "録音キー: \(settings.recordShortcut.displayString)"
     }
 
+    var accessibilityStatusText: String {
+        if accessibilityTrusted {
+            return "自動貼り付け権限: 許可済み"
+        }
+        if accessibilityNeedsRepair {
+            return "自動貼り付け権限: 要再設定"
+        }
+        return "自動貼り付け権限: 未許可"
+    }
+
+    var accessibilityStatusColor: Color {
+        if accessibilityTrusted {
+            return .green
+        }
+        return accessibilityNeedsRepair ? .orange : .red
+    }
+
     var hasSavedAPIKey: Bool {
         !apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -256,9 +282,9 @@ final class VoiceInputAppController: ObservableObject {
             return "AIを使わず、通常入力として高速に文字へ変換します"
         case .processing:
             if selectedCaptureMode == .aiPolish {
-                return "文字起こしとAI整形を進めています。貼り付けたい入力欄をクリックして待てます"
+                return "文字起こしとAI整形を進めています。読み込み中にクリックした入力欄へ貼り付けます"
             }
-            return "通常入力として文字起こししています。貼り付けたい入力欄をクリックして待てます"
+            return "通常入力として文字起こししています。読み込み中にクリックした入力欄へ貼り付けます"
         case .error(let message):
             return message
         }
@@ -367,6 +393,7 @@ final class VoiceInputAppController: ObservableObject {
     private func startRecording(captureMode: CaptureMode) {
         settings.defaultCaptureMode = .aiPolish
         activeCaptureMode = captureMode
+        processingTargetApplication = nil
         if let frontmostApplication = NSWorkspace.shared.frontmostApplication {
             rememberExternalApplicationIfNeeded(frontmostApplication)
         }
@@ -418,6 +445,7 @@ final class VoiceInputAppController: ObservableObject {
         let captureMode = activeCaptureMode ?? settings.defaultCaptureMode
         status = .processing
         audioLevels = Array(repeating: 0.12, count: 14)
+        processingTargetApplication = lastExternalApplication
         systemAudioMuteService.restoreSystemAudioAfterRecording()
         if settings.soundCuesEnabled {
             soundCuePlayer.playStopCue()
@@ -481,6 +509,7 @@ final class VoiceInputAppController: ObservableObject {
             errorMessage = warningMessage ?? ""
             audioLevels = Array(repeating: 0.08, count: 14)
             activeCaptureMode = nil
+            processingTargetApplication = nil
 
             let pasteCompleted: Bool
             if settings.autoPaste {
@@ -516,6 +545,7 @@ final class VoiceInputAppController: ObservableObject {
             errorMessage = localizedError
             audioLevels = Array(repeating: 0.08, count: 14)
             activeCaptureMode = nil
+            processingTargetApplication = nil
             try? historyStore.append(
                 HistoryEntry(
                     timestamp: Date(),
@@ -565,11 +595,16 @@ final class VoiceInputAppController: ObservableObject {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
 
-        guard AXIsProcessTrusted() else {
+        refreshAccessibilityStatus()
+        guard accessibilityTrusted else {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
             _ = AXIsProcessTrustedWithOptions(options)
-            status = .error("自動貼り付けにはアクセシビリティ権限が必要です。")
-            errorMessage = "アクセシビリティを許可したあと、Voice Input.app を一度開き直してください。"
+            status = .error("自動貼り付けの権限確認に失敗しました。")
+            if accessibilityNeedsRepair {
+                errorMessage = "アクセシビリティはONですが、このアプリへの反映が崩れています。repair_accessibility.command を実行して、Voice Input を OFF→ON してください。"
+            } else {
+                errorMessage = "自動貼り付けにはアクセシビリティ権限が必要です。Voice Input.app を許可してから開き直してください。"
+            }
             return false
         }
 
@@ -612,6 +647,7 @@ final class VoiceInputAppController: ObservableObject {
         }
 
         errorMessage = ""
+        refreshAccessibilityStatus()
         return true
     }
 
@@ -799,8 +835,12 @@ final class VoiceInputAppController: ObservableObject {
         if let frontmostApplication = NSWorkspace.shared.frontmostApplication {
             if frontmostApplication.bundleIdentifier != Bundle.main.bundleIdentifier {
                 rememberExternalApplicationIfNeeded(frontmostApplication)
+                processingTargetApplication = frontmostApplication
                 return frontmostApplication
             }
+        }
+        if let processingTargetApplication, !processingTargetApplication.isTerminated {
+            return processingTargetApplication
         }
         if let lastExternalApplication, !lastExternalApplication.isTerminated {
             return lastExternalApplication
@@ -814,11 +854,16 @@ final class VoiceInputAppController: ObservableObject {
     }
 
     private func pushAudioLevel(_ level: Double) {
-        let normalized = max(0.03, min(1.0, level))
+        let normalized = max(0.02, min(0.68, level * 0.72))
         if audioLevels.count >= 14 {
             audioLevels.removeFirst()
         }
         audioLevels.append(normalized)
+    }
+
+    private func refreshAccessibilityStatus() {
+        accessibilityTrusted = AXIsProcessTrusted()
+        accessibilityNeedsRepair = !accessibilityTrusted && AccessibilityPermissionChecker.systemWideUIAccessEnabled()
     }
 
     private func refreshMonthlyStats() {

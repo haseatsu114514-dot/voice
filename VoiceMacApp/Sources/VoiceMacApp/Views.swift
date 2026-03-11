@@ -700,7 +700,7 @@ struct WaveformView: View {
                                 endPoint: .bottom
                             )
                         )
-                        .frame(width: 7, height: max(10, CGFloat(level) * 52))
+                        .frame(width: 7, height: max(8, CGFloat(level) * 36))
                         .shadow(color: tint.opacity(isActive ? 0.28 : 0.10), radius: 5, y: 1)
                         .animation(.easeOut(duration: 0.1), value: level)
                 }
@@ -780,6 +780,9 @@ struct SettingsView: View {
                         Text("録音キーと API だけ設定すれば、すぐ使えます。")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
+                        Text(controller.accessibilityStatusText)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(controller.accessibilityStatusColor)
                     }
                 }
 
