@@ -1045,7 +1045,7 @@ struct WindowAccessor: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSView {
-        let view = NSView()
+        let view = NonInteractiveNSView()
         DispatchQueue.main.async {
             configureWindow(for: view, coordinator: context.coordinator, forceInitialSize: true)
         }
@@ -1053,6 +1053,9 @@ struct WindowAccessor: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        if let view = nsView as? NonInteractiveNSView {
+            view.isHidden = true
+        }
         DispatchQueue.main.async {
             configureWindow(for: nsView, coordinator: context.coordinator, forceInitialSize: false)
         }
@@ -1060,6 +1063,7 @@ struct WindowAccessor: NSViewRepresentable {
 
     private func configureWindow(for view: NSView, coordinator: Coordinator, forceInitialSize: Bool) {
         guard let window = view.window else { return }
+        window.ignoresMouseEvents = false
         window.level = alwaysOnTop ? .floating : .normal
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
@@ -1089,5 +1093,13 @@ struct WindowAccessor: NSViewRepresentable {
     final class Coordinator {
         var didApplyInitialSize = false
         var lastAppliedWindowSize: CGSize?
+    }
+}
+
+final class NonInteractiveNSView: NSView {
+    override var acceptsFirstResponder: Bool { false }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        return nil
     }
 }
