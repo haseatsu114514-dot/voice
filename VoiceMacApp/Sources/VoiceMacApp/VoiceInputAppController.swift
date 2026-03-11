@@ -390,6 +390,28 @@ final class VoiceInputAppController: ObservableObject {
         historyStore.openInFinder()
     }
 
+    func openAccessibilitySettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else {
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+
+    func runAccessibilityRepair() {
+        let scriptURL = URL(fileURLWithPath: "\(BuildPaths.repoRoot)/repair_accessibility.command")
+        NSWorkspace.shared.open(scriptURL)
+    }
+
+    func refreshAccessibilityPermissionState() {
+        refreshAccessibilityStatus()
+        if accessibilityTrusted, errorMessage.contains("アクセシビリティ") {
+            errorMessage = ""
+            if case .error = status {
+                status = .idle
+            }
+        }
+    }
+
     private func startRecording(captureMode: CaptureMode) {
         settings.defaultCaptureMode = .aiPolish
         activeCaptureMode = captureMode

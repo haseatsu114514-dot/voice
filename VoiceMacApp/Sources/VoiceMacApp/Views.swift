@@ -783,6 +783,20 @@ struct SettingsView: View {
                         Text(controller.accessibilityStatusText)
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(controller.accessibilityStatusColor)
+                        if !controller.accessibilityTrusted {
+                            HStack(spacing: 8) {
+                                Button("状態を再確認") {
+                                    controller.refreshAccessibilityPermissionState()
+                                }
+                                Button("アクセシビリティを開く") {
+                                    controller.openAccessibilitySettings()
+                                }
+                                Button("修復を実行") {
+                                    controller.runAccessibilityRepair()
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                        }
                     }
                 }
 
