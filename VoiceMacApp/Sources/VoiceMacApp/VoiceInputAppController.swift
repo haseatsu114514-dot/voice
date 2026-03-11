@@ -3,6 +3,14 @@ import Combine
 import Foundation
 import SwiftUI
 
+enum APIConnectionState: Equatable {
+    case missing
+    case saved
+    case testing
+    case verified
+    case failed(String)
+}
+
 @MainActor
 final class VoiceInputAppController: ObservableObject {
     @Published var status: RecorderStatus = .idle
@@ -11,6 +19,7 @@ final class VoiceInputAppController: ObservableObject {
     @Published var showingSettings: Bool = false
     @Published var apiKeyDraft: String = ""
     @Published var apiConnectionMessage: String = ""
+    @Published var apiConnectionState: APIConnectionState = .missing
     @Published var audioLevels: [Double] = Array(repeating: 0.08, count: 14)
     @Published var recordingElapsedSeconds: TimeInterval = 0
     @Published var monthlyStats: MonthlyUsageStats = .empty
@@ -30,6 +39,7 @@ final class VoiceInputAppController: ObservableObject {
     init(settings: SettingsStore = SettingsStore()) {
         self.settings = settings
         self.apiKeyDraft = keychain.load()
+        self.apiConnectionState = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .missing : .saved
         self.monthlyStats = historyStore.currentMonthStats()
 
         settings.objectWillChange
@@ -96,7 +106,62 @@ final class VoiceInputAppController: ObservableObject {
     }
 
     var apiSetupStatusText: String {
-        hasSavedAPIKey ? "API設定済み" : "API未設定"
+        switch apiConnectionState {
+        case .missing:
+            return "API未設定"
+        case .saved:
+            return "API保存済み"
+        case .testing:
+            return "接続確認中"
+        case .verified:
+            return "接続OK"
+        case .failed:
+            return "接続エラー"
+        }
+    }
+
+    var apiStatusTint: Color {
+        switch apiConnectionState {
+        case .missing:
+            return .orange
+        case .saved:
+            return .blue
+        case .testing:
+            return .orange
+        case .verified:
+            return .green
+        case .failed:
+            return .red
+        }
+    }
+
+    var apiConnectionSummaryText: String {
+        switch apiConnectionState {
+        case .missing:
+            return "APIキーがまだありません。保存してから接続テストを押します。"
+        case .saved:
+            return "APIキーは保存済みです。まだ接続テストはしていません。"
+        case .testing:
+            return "OpenAIに接続して確認しています..."
+        case .verified:
+            return "接続テストが成功しました。AIで整えるを使えます。"
+        case .failed:
+            return "接続テストに失敗しました。必要なときだけ詳細を開いて確認できます。"
+        }
+    }
+
+    var isTestingAPIConnection: Bool {
+        if case .testing = apiConnectionState {
+            return true
+        }
+        return false
+    }
+
+    var shouldShowAPIDetailDisclosure: Bool {
+        if case .failed = apiConnectionState {
+            return true
+        }
+        return false
     }
 
     var recordingElapsedText: String {
@@ -160,10 +225,14 @@ final class VoiceInputAppController: ObservableObject {
     }
 
     func saveAPIKey() {
+        let trimmedKey = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            try keychain.save(apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines))
-            apiConnectionMessage = "APIキーを保存しました。"
+            try keychain.save(trimmedKey)
+            apiKeyDraft = trimmedKey
+            apiConnectionState = trimmedKey.isEmpty ? .missing : .saved
+            apiConnectionMessage = ""
         } catch {
+            apiConnectionState = .failed(error.localizedDescription)
             apiConnectionMessage = error.localizedDescription
         }
     }
@@ -171,15 +240,20 @@ final class VoiceInputAppController: ObservableObject {
     func testConnection() {
         let key = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
-            apiConnectionMessage = "先にOpenAI APIキーを入力してください。"
+            apiConnectionState = .missing
+            apiConnectionMessage = ""
             return
         }
 
+        apiConnectionState = .testing
+        apiConnectionMessage = ""
         Task {
             do {
                 try await openAI.testConnection(apiKey: key)
-                apiConnectionMessage = "OpenAIへの接続を確認しました。"
+                apiConnectionState = .verified
+                apiConnectionMessage = ""
             } catch {
+                apiConnectionState = .failed(error.localizedDescription)
                 apiConnectionMessage = error.localizedDescription
             }
         }
@@ -392,7 +466,8 @@ final class VoiceInputAppController: ObservableObject {
         guard captureMode == .aiPolish else { return true }
         guard hasSavedAPIKey else {
             showingSettings = true
-            apiConnectionMessage = "先に設定 → OpenAI API で APIキーを保存してください。"
+            apiConnectionState = .missing
+            apiConnectionMessage = ""
             status = .error("AIで整えるにはAPI設定が必要です。")
             errorMessage = "AIで整えるにはAPI設定が必要です。"
             return false

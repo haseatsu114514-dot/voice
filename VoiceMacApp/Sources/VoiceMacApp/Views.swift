@@ -68,7 +68,7 @@ struct StandardMicView: View {
                             StatusPill(title: controller.status.title, color: controller.statusColor, compact: false)
                             StatusBadge(
                                 title: controller.apiSetupStatusText,
-                                tint: controller.hasSavedAPIKey ? Color.green : Color.orange
+                                tint: controller.apiStatusTint
                             )
                         }
                     }
@@ -233,7 +233,7 @@ struct CompactMicView: View {
                     .foregroundStyle(.secondary)
                 Text(controller.apiSetupStatusText)
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(controller.hasSavedAPIKey ? .green : .orange)
+                    .foregroundStyle(controller.apiStatusTint)
                 Text(controller.monthlyStats.shortSummaryText)
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(.secondary)
@@ -674,7 +674,7 @@ struct SettingsView: View {
                             ShortcutChip(text: controller.currentShortcutText)
                             StatusBadge(
                                 title: controller.apiSetupStatusText,
-                                tint: controller.hasSavedAPIKey ? Color.green : Color.orange
+                                tint: controller.apiStatusTint
                             )
                         }
                         Text("録音キーと API だけ設定すれば、すぐ使えます。")
@@ -705,38 +705,31 @@ struct SettingsView: View {
 
                 GroupBox("OpenAI API") {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(controller.hasSavedAPIKey ? "現在: APIキー設定済み" : "現在: APIキー未設定")
+                        Text("現在: \(controller.apiSetupStatusText)")
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(controller.hasSavedAPIKey ? .green : .orange)
+                            .foregroundStyle(controller.apiStatusTint)
                         SecureField("sk-...", text: $controller.apiKeyDraft)
                         HStack {
                             Button("APIキーを保存") {
                                 controller.saveAPIKey()
                             }
-                            Button("接続テスト") {
+                            Button(controller.isTestingAPIConnection ? "接続確認中..." : "接続テスト") {
                                 controller.testConnection()
                             }
+                            .disabled(controller.isTestingAPIConnection)
                         }
-                        if !controller.apiConnectionMessage.isEmpty {
-                            if controller.apiConnectionMessage == "APIキーを保存しました。" ||
-                                controller.apiConnectionMessage == "OpenAIへの接続を確認しました。" ||
-                                controller.apiConnectionMessage == "先にOpenAI APIキーを入力してください。" {
+                        Text(controller.apiConnectionSummaryText)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        if controller.shouldShowAPIDetailDisclosure {
+                            DisclosureGroup("詳細を表示", isExpanded: $showingAPIDetails) {
                                 Text(controller.apiConnectionMessage)
                                     .font(.system(size: 11))
                                     .foregroundStyle(.secondary)
-                            } else {
-                                Text("接続で問題がありました。必要なときだけ詳細を見られます。")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                                DisclosureGroup("詳細を表示", isExpanded: $showingAPIDetails) {
-                                    Text(controller.apiConnectionMessage)
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.secondary)
-                                        .padding(.top, 4)
-                                }
-                                .font(.system(size: 11, weight: .semibold))
-                                .tint(.secondary)
+                                    .padding(.top, 4)
                             }
+                            .font(.system(size: 11, weight: .semibold))
+                            .tint(.secondary)
                         }
                     }
                 }
