@@ -355,7 +355,9 @@ final class VoiceInputAppController: ObservableObject {
 
     func pasteLastTranscript() {
         guard !lastTranscript.isEmpty else { return }
-        paste(text: lastTranscript)
+        Task {
+            _ = await paste(text: lastTranscript)
+        }
     }
 
     func openHistory() {
@@ -461,6 +463,19 @@ final class VoiceInputAppController: ObservableObject {
             audioLevels = Array(repeating: 0.08, count: 14)
             activeCaptureMode = nil
 
+            let pasteCompleted: Bool
+            if settings.autoPaste {
+                pasteCompleted = await paste(text: finalText)
+            } else {
+                pasteCompleted = false
+            }
+            let deliveryErrorMessage = pasteCompleted
+                ? nil
+                : {
+                    let trimmed = errorMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return trimmed.isEmpty ? nil : trimmed
+                }()
+
             try? historyStore.append(
                 HistoryEntry(
                     timestamp: Date(),
@@ -470,15 +485,12 @@ final class VoiceInputAppController: ObservableObject {
                     durationSeconds: duration,
                     text: finalText,
                     success: true,
-                    errorMessage: nil,
+                    pasteCompleted: pasteCompleted,
+                    errorMessage: deliveryErrorMessage,
                     estimatedUSD: estimatedUSD
                 )
             )
             refreshMonthlyStats()
-
-            if settings.autoPaste {
-                paste(text: finalText)
-            }
         } catch {
             let localizedError = localized(error)
             status = .error(localizedError)
@@ -494,6 +506,7 @@ final class VoiceInputAppController: ObservableObject {
                     durationSeconds: duration,
                     text: lastTranscript,
                     success: false,
+                    pasteCompleted: false,
                     errorMessage: localizedError,
                     estimatedUSD: nil
                 )
@@ -529,7 +542,7 @@ final class VoiceInputAppController: ObservableObject {
         return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func paste(text: String) {
+    private func paste(text: String) async -> Bool {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
 
@@ -538,7 +551,7 @@ final class VoiceInputAppController: ObservableObject {
             _ = AXIsProcessTrustedWithOptions(options)
             status = .error("自動貼り付けにはアクセシビリティ権限が必要です。")
             errorMessage = "アクセシビリティを許可したあと、Voice Input.app を一度開き直してください。"
-            return
+            return false
         }
 
         if errorMessage.contains("アクセシビリティ") {
@@ -548,39 +561,39 @@ final class VoiceInputAppController: ObservableObject {
         guard let targetApplication = resolvedPasteTargetApplication() else {
             status = .error("貼り付け先が見つかりませんでした。")
             errorMessage = "貼り付け先が見つかりませんでした。原因: 戻る先のアプリや入力欄が見つかっていません。先に貼り付けたいアプリを開いてください。"
-            return
+            return false
         }
 
         _ = targetApplication.unhide()
         _ = targetApplication.activate(options: [.activateIgnoringOtherApps])
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
-            guard let self else { return }
+        try? await Task.sleep(nanoseconds: 180_000_000)
 
-            switch self.insertTextDirectly(text, into: targetApplication) {
-            case .success:
-                self.errorMessage = ""
-                return
-            case .noEditableTarget(let message):
-                self.status = .error("貼り付け先に入力欄がありません。")
-                self.errorMessage = message
-                return
-            case .failed:
-                break
-            }
-
-            if NSWorkspace.shared.frontmostApplication?.processIdentifier != targetApplication.processIdentifier {
-                _ = targetApplication.activate(options: [.activateIgnoringOtherApps])
-            }
-
-            guard self.postCommandV(to: targetApplication.processIdentifier) || self.postCommandV() else {
-                self.status = .error("貼り付け操作に失敗しました。")
-                self.errorMessage = "貼り付け操作に失敗しました。原因: macOSが貼り付けキー送信を受け付けませんでした。"
-                return
-            }
-
-            self.errorMessage = ""
+        switch insertTextDirectly(text, into: targetApplication) {
+        case .success:
+            errorMessage = ""
+            return true
+        case .noEditableTarget(let message):
+            status = .error("貼り付け先に入力欄がありません。")
+            errorMessage = message
+            return false
+        case .failed:
+            break
         }
+
+        if NSWorkspace.shared.frontmostApplication?.processIdentifier != targetApplication.processIdentifier {
+            _ = targetApplication.activate(options: [.activateIgnoringOtherApps])
+            try? await Task.sleep(nanoseconds: 120_000_000)
+        }
+
+        guard postCommandV(to: targetApplication.processIdentifier) || postCommandV() else {
+            status = .error("貼り付け操作に失敗しました。")
+            errorMessage = "貼り付け操作に失敗しました。原因: macOSが貼り付けキー送信を受け付けませんでした。"
+            return false
+        }
+
+        errorMessage = ""
+        return true
     }
 
     private func insertTextDirectly(_ text: String, into application: NSRunningApplication) -> PasteDeliveryResult {

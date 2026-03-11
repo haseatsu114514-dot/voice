@@ -136,6 +136,7 @@ struct HistoryEntry: Codable {
     let durationSeconds: Double
     let text: String
     let success: Bool
+    let pasteCompleted: Bool?
     let errorMessage: String?
     let estimatedUSD: Double?
 }
@@ -181,12 +182,12 @@ final class HistoryStore {
 
         let totalDurationSeconds = entries.reduce(0) { $0 + $1.durationSeconds }
         let successfulDurationSeconds = entries
-            .filter(\.success)
+            .filter { $0.pasteCompleted == true }
             .reduce(0) { $0 + $1.durationSeconds }
         let successfulSessions = entries.filter(\.success).count
         let failedSessions = entries.filter { !$0.success }.count
         let totalCharacters = entries
-            .filter(\.success)
+            .filter { $0.pasteCompleted == true }
             .reduce(0) { $0 + $1.text.count }
         let estimatedUSD = entries.reduce(0) { partialResult, entry in
             if let stored = entry.estimatedUSD {
