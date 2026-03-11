@@ -72,7 +72,7 @@ struct StandardMicView: View {
                             )
                             CostChip(text: controller.monthlyCostJPYText)
                         }
-                        Text("\(controller.typingBenchmarkText) / \(controller.savedTimeText)短縮")
+                        Text("\(controller.typingBenchmarkText) / \(controller.savingsSummaryText)")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
@@ -234,7 +234,7 @@ struct CompactMicView: View {
                 Text(controller.monthlyCostJPYText)
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
-                Text(controller.savedTimeText + "短縮")
+                Text(controller.savingsSummaryText)
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Text(controller.monthlyStats.shortSummaryText)

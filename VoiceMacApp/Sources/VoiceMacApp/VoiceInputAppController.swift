@@ -139,11 +139,11 @@ final class VoiceInputAppController: ObservableObject {
     }
 
     var savingsSummaryText: String {
-        "手打ち換算 \(manualTypingTimeText) / 節約 \(savedTimeText)"
+        "今月 \(savedTimeText) 短縮"
     }
 
     var typingBenchmarkText: String {
-        "寿司打 5.0打鍵/秒換算"
+        "手打ち 125字/分換算"
     }
 
     var currentShortcutText: String {
