@@ -21,6 +21,8 @@ OS標準より使いやすくするために、次の機能を実装していま
 
 macなら、まずはこれで十分です。
 
+迷ったら、まず [BEGINNER_MANUAL_JA.md](/Users/hasegawaatsuki/Documents/New%20project/voice/BEGINNER_MANUAL_JA.md) を見てください。
+
 1. [start_mic_button.command](/Users/hasegawaatsuki/Documents/New%20project/voice/start_mic_button.command) をダブルクリック
 2. 小さい `MIC` ボタンが出る
 3. そのボタンを1回押して話す
@@ -162,4 +164,6 @@ GUIで変更できる項目:
 - `transcript_history.jsonl`: 履歴ファイル
 - [start_mic_button.command](/Users/hasegawaatsuki/Documents/New%20project/voice/start_mic_button.command): ダブルクリック起動
 - [open_settings.command](/Users/hasegawaatsuki/Documents/New%20project/voice/open_settings.command): 設定画面を開く
+- [backup_to_github.command](/Users/hasegawaatsuki/Documents/New%20project/voice/backup_to_github.command): GitHubへバックアップ
+- [BEGINNER_MANUAL_JA.md](/Users/hasegawaatsuki/Documents/New%20project/voice/BEGINNER_MANUAL_JA.md): 初心者向けマニュアル
 - `IMPLEMENTATION_MEMO_JA.md`: 実装手順メモ
