@@ -256,9 +256,9 @@ final class VoiceInputAppController: ObservableObject {
             return "AIを使わず、通常入力として高速に文字へ変換します"
         case .processing:
             if selectedCaptureMode == .aiPolish {
-                return "文字起こしとAI整形を進めています"
+                return "文字起こしとAI整形を進めています。貼り付けたい入力欄をクリックして待てます"
             }
-            return "通常入力として文字起こししています"
+            return "通常入力として文字起こししています。貼り付けたい入力欄をクリックして待てます"
         case .error(let message):
             return message
         }
@@ -764,11 +764,14 @@ final class VoiceInputAppController: ObservableObject {
     }
 
     private func resolvedPasteTargetApplication() -> NSRunningApplication? {
+        if let frontmostApplication = NSWorkspace.shared.frontmostApplication {
+            if frontmostApplication.bundleIdentifier != Bundle.main.bundleIdentifier {
+                rememberExternalApplicationIfNeeded(frontmostApplication)
+                return frontmostApplication
+            }
+        }
         if let lastExternalApplication, !lastExternalApplication.isTerminated {
             return lastExternalApplication
-        }
-        if let frontmostApplication = NSWorkspace.shared.frontmostApplication {
-            rememberExternalApplicationIfNeeded(frontmostApplication)
         }
         return lastExternalApplication
     }
