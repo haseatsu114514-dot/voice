@@ -36,6 +36,7 @@ final class VoiceInputAppController: ObservableObject {
     private let offline = OfflineTranscriptionService()
     private let soundCuePlayer = SoundCuePlayer.shared
     private let systemAudioMuteService = SystemAudioMuteService()
+    private let typingBenchmark = TypingBenchmark.sushiDaAverage
     private var cancellables: Set<AnyCancellable> = []
     private var lastExternalApplication: NSRunningApplication?
 
@@ -119,6 +120,30 @@ final class VoiceInputAppController: ObservableObject {
 
     var estimatedMonthlyJPY: Int {
         Int((monthlyStats.estimatedUSD * 160).rounded())
+    }
+
+    var estimatedManualTypingSeconds: Double {
+        typingBenchmark.estimatedTypingSeconds(forCharacterCount: monthlyStats.totalCharacters)
+    }
+
+    var savedTimeSeconds: Double {
+        max(0, estimatedManualTypingSeconds - monthlyStats.totalDurationSeconds)
+    }
+
+    var savedTimeText: String {
+        formatDuration(savedTimeSeconds)
+    }
+
+    var manualTypingTimeText: String {
+        formatDuration(estimatedManualTypingSeconds)
+    }
+
+    var savingsSummaryText: String {
+        "手打ち換算 \(manualTypingTimeText) / 節約 \(savedTimeText)"
+    }
+
+    var typingBenchmarkText: String {
+        "寿司打 5.0打鍵/秒換算"
     }
 
     var currentShortcutText: String {
@@ -224,6 +249,8 @@ final class VoiceInputAppController: ObservableObject {
     var monthUsageDetails: [UsageMetric] {
         [
             UsageMetric(title: "録音時間", value: monthlyStats.durationText),
+            UsageMetric(title: "手打ち換算", value: manualTypingTimeText),
+            UsageMetric(title: "節約時間", value: savedTimeText),
             UsageMetric(title: "成功回数", value: "\(monthlyStats.successfulSessions)回"),
             UsageMetric(title: "文字数", value: "\(monthlyStats.totalCharacters)字"),
             UsageMetric(title: "概算費用", value: "\(estimatedMonthlyJPY)円")
@@ -551,6 +578,16 @@ final class VoiceInputAppController: ObservableObject {
 
     private func localized(_ error: Error) -> String {
         UserFacingErrorTranslator.message(for: error)
+    }
+
+    private func formatDuration(_ seconds: Double) -> String {
+        if seconds >= 3600 {
+            return String(format: "%.1f時間", seconds / 3600)
+        }
+        if seconds >= 60 {
+            return String(format: "%.1f分", seconds / 60)
+        }
+        return String(format: "%.0f秒", seconds)
     }
 }
 

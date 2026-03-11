@@ -72,6 +72,9 @@ struct StandardMicView: View {
                             )
                             CostChip(text: controller.monthlyCostJPYText)
                         }
+                        Text("\(controller.typingBenchmarkText) / \(controller.savedTimeText)短縮")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
                     }
 
                     Spacer()
@@ -159,6 +162,9 @@ struct StandardMicView: View {
                         Text("\(controller.monthlyStats.shortSummaryText) / \(controller.monthlyCostJPYText)")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.secondary)
+                        Text(controller.savingsSummaryText)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
 
                         if !controller.hasSavedAPIKey {
                             Text("この音声入力を使う前に、設定で APIキー を保存します。")
@@ -226,6 +232,9 @@ struct CompactMicView: View {
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(controller.apiStatusTint)
                 Text(controller.monthlyCostJPYText)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(controller.savedTimeText + "短縮")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Text(controller.monthlyStats.shortSummaryText)
@@ -461,6 +470,7 @@ struct StatusCard: View {
 struct UsagePanel: View {
     let metrics: [UsageMetric]
     let summary: String
+    let benchmark: String
 
     var body: some View {
         GlassPanel {
@@ -488,6 +498,9 @@ struct UsagePanel: View {
 
                 Text(summary)
                     .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Text(benchmark)
+                    .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }
         }
@@ -801,7 +814,11 @@ struct SettingsView: View {
                         }
 
                         DisclosureGroup("今月の使用量", isExpanded: $showingUsageDetails) {
-                            UsagePanel(metrics: controller.monthUsageDetails, summary: controller.monthlyEstimateText)
+                            UsagePanel(
+                                metrics: controller.monthUsageDetails,
+                                summary: controller.monthlyEstimateText,
+                                benchmark: "\(controller.typingBenchmarkText) / \(controller.savingsSummaryText)"
+                            )
                                 .padding(.top, 8)
                         }
                         .font(.system(size: 12, weight: .semibold))

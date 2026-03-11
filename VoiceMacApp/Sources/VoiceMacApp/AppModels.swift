@@ -217,6 +217,24 @@ struct MonthlyUsageStats {
     }
 }
 
+struct TypingBenchmark {
+    let keysPerSecond: Double
+    let keysPerJapaneseCharacter: Double
+    let typoMultiplier: Double
+
+    static let sushiDaAverage = TypingBenchmark(
+        keysPerSecond: 5.0,
+        keysPerJapaneseCharacter: 2.4,
+        typoMultiplier: (650.0 + 49.0) / 650.0
+    )
+
+    func estimatedTypingSeconds(forCharacterCount characterCount: Int) -> Double {
+        guard characterCount > 0 else { return 0 }
+        let estimatedKeyCount = Double(characterCount) * keysPerJapaneseCharacter * typoMultiplier
+        return estimatedKeyCount / keysPerSecond
+    }
+}
+
 struct Shortcut: Codable, Equatable, Hashable {
     var keyCode: UInt32
     var modifiers: UInt
