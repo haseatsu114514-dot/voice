@@ -91,6 +91,10 @@ struct StandardMicView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
 
+                if !controller.inlineErrorText.isEmpty {
+                    OneLineErrorBanner(text: controller.inlineErrorText)
+                }
+
                 GlassPanel {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
@@ -233,6 +237,12 @@ struct CompactMicView: View {
                 Text(controller.monthlyStats.shortSummaryText)
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(.secondary)
+                if !controller.inlineErrorText.isEmpty {
+                    Text(controller.inlineErrorText)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.red)
+                        .lineLimit(1)
+                }
             }
             .multilineTextAlignment(.center)
 
@@ -311,6 +321,28 @@ struct StatusBadge: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(Capsule().fill(tint.opacity(0.13)))
+    }
+}
+
+struct OneLineErrorBanner: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11, weight: .bold))
+            Text(text)
+                .font(.system(size: 11, weight: .medium))
+                .lineLimit(1)
+        }
+        .foregroundStyle(.red)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.red.opacity(0.08))
+        )
     }
 }
 

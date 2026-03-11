@@ -209,6 +209,10 @@ final class VoiceInputAppController: ObservableObject {
         }
     }
 
+    var inlineErrorText: String {
+        errorMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var monthUsageDetails: [UsageMetric] {
         [
             UsageMetric(title: "録音時間", value: monthlyStats.durationText),
@@ -324,7 +328,11 @@ final class VoiceInputAppController: ObservableObject {
                 recordingElapsedSeconds = 0
                 audioLevels = Array(repeating: 0.08, count: 14)
                 if settings.muteSystemAudioWhileRecording {
-                    systemAudioMuteService.muteSystemAudioForRecording()
+                    do {
+                        try systemAudioMuteService.muteSystemAudioForRecording()
+                    } catch {
+                        errorMessage = error.localizedDescription
+                    }
                 }
                 if settings.soundCuesEnabled {
                     soundCuePlayer.playStartCue()

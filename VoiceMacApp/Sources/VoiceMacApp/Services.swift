@@ -55,7 +55,7 @@ final class SettingsStore: ObservableObject {
         self.autoStopSeconds = defaults.object(forKey: "settings.autoStopSeconds") as? Double ?? 1.2
         self.fillerRemoval = defaults.object(forKey: "settings.fillerRemoval") as? Bool ?? true
         self.alwaysOnTop = defaults.object(forKey: "settings.alwaysOnTop") as? Bool ?? true
-        self.muteSystemAudioWhileRecording = defaults.object(forKey: "settings.muteSystemAudioWhileRecording") as? Bool ?? false
+        self.muteSystemAudioWhileRecording = defaults.object(forKey: "settings.muteSystemAudioWhileRecording") as? Bool ?? true
     }
 
     private func save() {
@@ -534,12 +534,21 @@ final class SoundCuePlayer: NSObject, AVAudioPlayerDelegate {
 final class SystemAudioMuteService {
     private var previousMutedState: Bool?
 
-    func muteSystemAudioForRecording() {
+    func muteSystemAudioForRecording() throws {
         guard previousMutedState == nil else { return }
-        guard let currentMuted = readCurrentMutedState() else { return }
+        guard let currentMuted = readCurrentMutedState() else {
+            throw NSError(domain: "SystemAudioMuteService", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "録音中ミュートの状態を確認できませんでした。"
+            ])
+        }
         previousMutedState = currentMuted
         guard !currentMuted else { return }
-        _ = runAppleScript("set volume output muted true")
+        guard runAppleScript("set volume output muted true") != nil else {
+            previousMutedState = nil
+            throw NSError(domain: "SystemAudioMuteService", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "録音中ミュートを有効にできませんでした。"
+            ])
+        }
     }
 
     func restoreSystemAudioAfterRecording() {
