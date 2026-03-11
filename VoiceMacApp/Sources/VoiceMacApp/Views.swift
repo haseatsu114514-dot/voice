@@ -78,6 +78,9 @@ struct StandardMicView: View {
                         Text(controller.dailySavingsSummaryText)
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.secondary)
+                        Text("録音中の再生音: \(controller.settings.recordingAudioControlMode.title)")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
                     }
 
                     Spacer()
@@ -264,6 +267,9 @@ struct CompactMicView: View {
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(controller.apiStatusTint)
                 Text(controller.monthlyCostJPYText)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text("再生音: \(controller.settings.recordingAudioControlMode.title)")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Text(controller.savingsSummaryText)
