@@ -12,18 +12,18 @@ enum AppMode: String, CaseIterable, Identifiable, Codable {
     var title: String {
         switch self {
         case .offline:
-            return "Offline"
+            return "オフライン"
         case .balanced:
-            return "Balanced"
+            return "標準"
         case .best:
-            return "Best"
+            return "高精度"
         }
     }
 
     var providerLabel: String {
         switch self {
         case .offline:
-            return "Local"
+            return "PC内"
         case .balanced, .best:
             return "OpenAI"
         }
@@ -52,6 +52,40 @@ enum AppMode: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum InterfaceMode: String, CaseIterable, Identifiable, Codable {
+    case standard
+    case compact
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .standard:
+            return "標準"
+        case .compact:
+            return "小型"
+        }
+    }
+
+    var toggleButtonTitle: String {
+        switch self {
+        case .standard:
+            return "小さくする"
+        case .compact:
+            return "標準に戻す"
+        }
+    }
+
+    var windowSize: CGSize {
+        switch self {
+        case .standard:
+            return CGSize(width: 380, height: 620)
+        case .compact:
+            return CGSize(width: 180, height: 250)
+        }
+    }
+}
+
 enum RecorderStatus: Equatable {
     case idle
     case listening
@@ -61,14 +95,91 @@ enum RecorderStatus: Equatable {
     var title: String {
         switch self {
         case .idle:
-            return "Ready"
+            return "待機中"
         case .listening:
-            return "Listening"
+            return "音声入力中"
         case .processing:
-            return "Processing"
+            return "変換中"
         case .error:
-            return "Error"
+            return "エラー"
         }
+    }
+
+    var detail: String {
+        switch self {
+        case .idle:
+            return "ボタンかショートカットで開始できます"
+        case .listening:
+            return "話している音をそのまま録音しています"
+        case .processing:
+            return "録音した音声を文字に変換しています"
+        case .error(let message):
+            return message
+        }
+    }
+
+    var isListening: Bool {
+        if case .listening = self {
+            return true
+        }
+        return false
+    }
+
+    var isProcessing: Bool {
+        if case .processing = self {
+            return true
+        }
+        return false
+    }
+
+    var isError: Bool {
+        if case .error = self {
+            return true
+        }
+        return false
+    }
+}
+
+struct MonthlyUsageStats {
+    let totalDurationSeconds: Double
+    let successfulSessions: Int
+    let failedSessions: Int
+    let totalCharacters: Int
+    let estimatedUSD: Double
+
+    static let empty = MonthlyUsageStats(
+        totalDurationSeconds: 0,
+        successfulSessions: 0,
+        failedSessions: 0,
+        totalCharacters: 0,
+        estimatedUSD: 0
+    )
+
+    var totalSessions: Int {
+        successfulSessions + failedSessions
+    }
+
+    var totalMinutes: Double {
+        totalDurationSeconds / 60
+    }
+
+    var successRate: Double {
+        guard totalSessions > 0 else { return 1.0 }
+        return Double(successfulSessions) / Double(totalSessions)
+    }
+
+    var durationText: String {
+        if totalDurationSeconds >= 3600 {
+            return String(format: "%.1f時間", totalDurationSeconds / 3600)
+        }
+        return String(format: "%.1f分", totalMinutes)
+    }
+
+    var shortSummaryText: String {
+        guard totalSessions > 0 else {
+            return "今月 まだ未使用"
+        }
+        return String(format: "今月 %.1f分 / %d回", totalMinutes, totalSessions)
     }
 }
 

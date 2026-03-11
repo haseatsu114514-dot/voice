@@ -75,12 +75,16 @@ python main.py --config config.toml --mic-button
 
 アプリでできること:
 - 小さいマイクUI
+- 録音中の波形表示と状態表示
+- 日本語メインのUI
+- 標準表示 / 小型表示の切り替え
 - OpenAI APIキーの保存と接続テスト
 - 録音ショートカット変更
 - モード切替
   Offline / Balanced / Best
 - 履歴保存
 - Paste Last / Copy Last
+- 今月の使用量表示
 
 ## 重要: macの権限
 

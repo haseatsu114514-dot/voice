@@ -44,7 +44,9 @@
 1. デスクトップの `Voice Input.app` をダブルクリック
 2. アプリが開いたら `MIC` を押す
 3. 初回だけマイク権限とアクセシビリティ権限を許可する
-4. 設定を変えたいときはアプリ内の `Settings` を押す
+4. 録音中は波形と `音声入力中` の表示が出る
+5. 設定を変えたいときはアプリ内の `設定` を押す
+6. 邪魔なときは `小さくする` で小型表示に切り替える
 
 ### B. これまでのPython版
 
@@ -106,25 +108,27 @@
 そのため、話し直さなくても復旧できます。
 
 使うボタン:
-- `Paste Last`
+- `前回を貼る`
   最後の結果をもう一度貼る
-- `Copy Last`
+- `前回をコピー`
   最後の結果をコピーする
-- `Open History`
+- `履歴を開く`
   履歴ファイルを開く
 
 ---
 
 ## 6. 設定を変えたいとき
 
-設定画面を開くには、[open_settings.command](/Users/hasegawaatsuki/Documents/New%20project/voice/open_settings.command) をダブルクリックします。
+設定画面を開くには、macアプリ版ならアプリ内の `設定` を押します。
+Python版なら、[open_settings.command](/Users/hasegawaatsuki/Documents/New%20project/voice/open_settings.command) をダブルクリックします。
 
 変更しやすい項目:
 - 録音ホットキー
-- 学習ホットキー
-- モデル
+- 表示サイズ
+- モード
 - 無音で止まるまでの秒数
-- マイクボタンのタイトル
+- OpenAI APIキー
+- 今のショートカット確認
 
 難しい設定は、最初は触らなくて大丈夫です。
 

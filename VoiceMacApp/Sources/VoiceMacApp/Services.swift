@@ -8,6 +8,7 @@ import Security
 final class SettingsStore: ObservableObject {
     @Published var mode: AppMode { didSet { save() } }
     @Published var recordShortcut: Shortcut { didSet { save() } }
+    @Published var interfaceMode: InterfaceMode { didSet { save() } }
     @Published var autoPaste: Bool { didSet { save() } }
     @Published var autoStopEnabled: Bool { didSet { save() } }
     @Published var autoStopSeconds: Double { didSet { save() } }
@@ -31,6 +32,13 @@ final class SettingsStore: ObservableObject {
             self.recordShortcut = .defaultRecord
         }
 
+        if let interfaceModeRaw = defaults.string(forKey: "settings.interfaceMode"),
+           let savedInterfaceMode = InterfaceMode(rawValue: interfaceModeRaw) {
+            self.interfaceMode = savedInterfaceMode
+        } else {
+            self.interfaceMode = .standard
+        }
+
         self.autoPaste = defaults.object(forKey: "settings.autoPaste") as? Bool ?? true
         self.autoStopEnabled = defaults.object(forKey: "settings.autoStopEnabled") as? Bool ?? true
         self.autoStopSeconds = defaults.object(forKey: "settings.autoStopSeconds") as? Double ?? 1.2
@@ -40,6 +48,7 @@ final class SettingsStore: ObservableObject {
 
     private func save() {
         defaults.set(mode.rawValue, forKey: "settings.mode")
+        defaults.set(interfaceMode.rawValue, forKey: "settings.interfaceMode")
         defaults.set(autoPaste, forKey: "settings.autoPaste")
         defaults.set(autoStopEnabled, forKey: "settings.autoStopEnabled")
         defaults.set(autoStopSeconds, forKey: "settings.autoStopSeconds")
@@ -70,7 +79,7 @@ final class KeychainService {
         let status = SecItemAdd(newItem as CFDictionary, nil)
         guard status == errSecSuccess else {
             throw NSError(domain: "KeychainService", code: Int(status), userInfo: [
-                NSLocalizedDescriptionKey: "Failed to save API key."
+                NSLocalizedDescriptionKey: "APIキーの保存に失敗しました。"
             ])
         }
     }
@@ -136,18 +145,47 @@ final class HistoryStore {
     }
 
     func currentMonthDurationSeconds() -> Double {
-        guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
-            return 0
-        }
+        currentMonthStats().totalDurationSeconds
+    }
+
+    func currentMonthStats(referenceDate: Date = Date()) -> MonthlyUsageStats {
         let calendar = Calendar.current
+        let entries = readEntries()
+            .filter { calendar.isDate($0.timestamp, equalTo: referenceDate, toGranularity: .month) }
+
+        let totalDurationSeconds = entries.reduce(0) { $0 + $1.durationSeconds }
+        let successfulSessions = entries.filter(\.success).count
+        let failedSessions = entries.filter { !$0.success }.count
+        let totalCharacters = entries
+            .filter(\.success)
+            .reduce(0) { $0 + $1.text.count }
+        let estimatedUSD = entries.reduce(0) { partialResult, entry in
+            guard entry.success,
+                  let mode = AppMode(rawValue: entry.mode) else {
+                return partialResult
+            }
+            return partialResult + (entry.durationSeconds / 60 * mode.usdCostPerMinute)
+        }
+
+        return MonthlyUsageStats(
+            totalDurationSeconds: totalDurationSeconds,
+            successfulSessions: successfulSessions,
+            failedSessions: failedSessions,
+            totalCharacters: totalCharacters,
+            estimatedUSD: estimatedUSD
+        )
+    }
+
+    private func readEntries() -> [HistoryEntry] {
+        guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
+            return []
+        }
         return content
             .split(separator: "\n")
             .compactMap { line -> HistoryEntry? in
                 guard let data = line.data(using: .utf8) else { return nil }
                 return try? decoder.decode(HistoryEntry.self, from: data)
             }
-            .filter { calendar.isDate($0.timestamp, equalTo: Date(), toGranularity: .month) }
-            .reduce(0) { $0 + $1.durationSeconds }
     }
 
     func openInFinder() {
@@ -163,6 +201,7 @@ final class RecorderService: NSObject, AVAudioRecorderDelegate {
     private var autoStopEnabled = true
     private var autoStopSeconds: Double = 1.2
     var onSilenceDetected: (() -> Void)?
+    var onLevelUpdate: ((Float, TimeInterval) -> Void)?
 
     var isRecording: Bool {
         recorder?.isRecording ?? false
@@ -207,6 +246,7 @@ final class RecorderService: NSObject, AVAudioRecorderDelegate {
         self.lastVoiceAt = Date()
         self.autoStopEnabled = autoStopEnabled
         self.autoStopSeconds = autoStopSeconds
+        onLevelUpdate?(0.04, 0)
 
         meterTimer?.invalidate()
         meterTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
@@ -222,6 +262,7 @@ final class RecorderService: NSObject, AVAudioRecorderDelegate {
         let url = recorder.url
         let duration = Date().timeIntervalSince(recordStart ?? Date())
         self.recorder = nil
+        onLevelUpdate?(0, duration)
         return (url, duration)
     }
 
@@ -230,6 +271,9 @@ final class RecorderService: NSObject, AVAudioRecorderDelegate {
         recorder.updateMeters()
         let power = recorder.averagePower(forChannel: 0)
         let now = Date()
+        let normalizedPower = max(0.02, min(1.0, (power + 55) / 55))
+        let elapsed = now.timeIntervalSince(recordStart ?? now)
+        onLevelUpdate?(normalizedPower, elapsed)
         if power > -45 {
             lastVoiceAt = now
         }
@@ -257,7 +301,7 @@ struct OpenAITranscriptionService {
         guard let httpResponse = response as? HTTPURLResponse,
               200..<300 ~= httpResponse.statusCode else {
             throw NSError(domain: "OpenAITranscriptionService", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Failed to connect to OpenAI."
+                NSLocalizedDescriptionKey: "OpenAIに接続できませんでした。"
             ])
         }
     }
@@ -273,7 +317,7 @@ struct OpenAITranscriptionService {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NSError(domain: "OpenAITranscriptionService", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "Invalid response from OpenAI."
+                NSLocalizedDescriptionKey: "OpenAIから不正な応答が返りました。"
             ])
         }
 
@@ -326,13 +370,13 @@ struct OfflineTranscriptionService {
 
         guard FileManager.default.fileExists(atPath: pythonURL.path) else {
             throw NSError(domain: "OfflineTranscriptionService", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Offline Python environment was not found."
+                NSLocalizedDescriptionKey: "オフライン用のPython環境が見つかりません。"
             ])
         }
 
         guard FileManager.default.fileExists(atPath: scriptURL.path) else {
             throw NSError(domain: "OfflineTranscriptionService", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "offline_transcribe.py was not found."
+                NSLocalizedDescriptionKey: "offline_transcribe.py が見つかりません。"
             ])
         }
 
@@ -347,7 +391,7 @@ struct OfflineTranscriptionService {
 
         let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
         if process.terminationStatus != 0 {
-            let body = String(data: data, encoding: .utf8) ?? "Offline transcription failed."
+            let body = String(data: data, encoding: .utf8) ?? "オフライン文字起こしに失敗しました。"
             throw NSError(domain: "OfflineTranscriptionService", code: Int(process.terminationStatus), userInfo: [
                 NSLocalizedDescriptionKey: body
             ])
