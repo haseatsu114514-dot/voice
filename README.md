@@ -26,6 +26,7 @@ macなら、まずはこれで十分です。
 macアプリ版を使う場合:
 - アプリ本体: `/Users/hasegawaatsuki/Applications/Voice Input.app`
 - デスクトップショートカット: `/Users/hasegawaatsuki/Desktop/Voice Input.app`
+- 更新用: `/Users/hasegawaatsuki/Desktop/update_voice_app.command`
 
 1. [start_mic_button.command](/Users/hasegawaatsuki/Documents/New%20project/voice/start_mic_button.command) をダブルクリック
 2. 小さい `MIC` ボタンが出る
@@ -33,6 +34,10 @@ macアプリ版を使う場合:
 4. 無音になると自動で止まって、AI処理して貼り付ける
 
 Typelessっぽく使うなら、この起動方法がいちばん近いです。
+
+最新版へ更新したいとき:
+1. `/Users/hasegawaatsuki/Desktop/update_voice_app.command` をダブルクリック
+2. 古いアプリが閉じて、最新版が起動する
 
 ## Wi-Fiについて
 
