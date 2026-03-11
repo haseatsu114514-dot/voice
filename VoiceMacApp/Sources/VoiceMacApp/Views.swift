@@ -25,6 +25,7 @@ struct MainMicView: View {
                 alwaysOnTop: controller.settings.alwaysOnTop,
                 windowSize: windowSize
             )
+            .allowsHitTesting(false)
         )
         .sheet(isPresented: $controller.showingSettings) {
             SettingsView(controller: controller)
@@ -763,6 +764,7 @@ struct WindowBackground: View {
             endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 }
 
