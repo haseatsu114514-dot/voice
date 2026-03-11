@@ -33,30 +33,47 @@ struct StandardMicView: View {
     var body: some View {
         VStack(spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("音声入力")
-                        .font(.system(size: 24, weight: .bold))
-                    Text("ボタンかショートカットで、すぐに話し始められます")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    ShortcutChip(text: controller.currentShortcutText)
+                HStack(alignment: .top, spacing: 12) {
+                    AppHeroBadge()
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("日本語音声入力")
+                            .font(.system(size: 24, weight: .bold))
+                        Text("話した内容を、そのまま文字にするか、AIで整えて貼り付けるアプリです")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer()
 
-                HStack(spacing: 8) {
-                    SmallIconButton(systemImage: "rectangle.compress.vertical") {
-                        controller.toggleInterfaceMode()
-                    }
-                    .help("小型モードに切り替え")
-
-                    SmallIconButton(systemImage: "gearshape.fill") {
+                VStack(alignment: .trailing, spacing: 8) {
+                    HeaderSettingsButton {
                         controller.showingSettings = true
                     }
-                    .help("設定を開く")
+                    StatusBadge(
+                        title: controller.apiSetupStatusText,
+                        tint: controller.hasSavedAPIKey ? Color.green : Color.orange
+                    )
                 }
             }
 
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 6) {
+                    ShortcutChip(text: controller.currentShortcutText)
+                    Text("起動方法: 下の「そのまま」か「AIで整える」を押します")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                SmallIconButton(systemImage: "rectangle.compress.vertical") {
+                    controller.toggleInterfaceMode()
+                }
+                .help("小型モードに切り替え")
+            }
+
+            SetupGuidePanel(controller: controller)
             StatusCard(controller: controller)
 
             HStack(spacing: 10) {
@@ -172,6 +189,9 @@ struct CompactMicView: View {
                 Text(controller.currentShortcutText)
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(.secondary)
+                Text(controller.apiSetupStatusText)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(controller.hasSavedAPIKey ? .green : .orange)
                 Text(controller.monthlyStats.shortSummaryText)
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(.secondary)
@@ -191,6 +211,96 @@ struct CompactMicView: View {
         .padding(.horizontal, 12)
         .padding(.bottom, 12)
         .background(WindowBackground())
+    }
+}
+
+struct AppHeroBadge: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 18)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.21, green: 0.54, blue: 1.0),
+                            Color(red: 0.97, green: 0.73, blue: 0.38)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 56, height: 56)
+
+            VStack(spacing: 2) {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 18, weight: .bold))
+                HStack(spacing: 2) {
+                    Capsule().frame(width: 4, height: 10)
+                    Capsule().frame(width: 4, height: 14)
+                    Capsule().frame(width: 4, height: 10)
+                }
+                .foregroundStyle(.white.opacity(0.9))
+            }
+            .foregroundStyle(.white)
+        }
+    }
+}
+
+struct HeaderSettingsButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "gearshape.fill")
+                Text("設定")
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.borderedProminent)
+    }
+}
+
+struct StatusBadge: View {
+    let title: String
+    let tint: Color
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(tint.opacity(0.13)))
+    }
+}
+
+struct SetupGuidePanel: View {
+    @ObservedObject var controller: VoiceInputAppController
+
+    var body: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("最初にやること")
+                    .font(.system(size: 13, weight: .semibold))
+
+                Text("1. 右上の「設定」を押す")
+                    .font(.system(size: 11))
+                Text("2. 「OpenAI API」で APIキーを保存する")
+                    .font(.system(size: 11))
+                Text("3. 「録音ショートカット」で好きなキーに変える")
+                    .font(.system(size: 11))
+                Text("4. 戻って「そのまま」か「AIで整える」を押す")
+                    .font(.system(size: 11))
+
+                if !controller.hasSavedAPIKey {
+                    Text("今は API が未設定なので、「AIで整える」を押すと設定画面が開きます。")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.orange)
+                }
+            }
+        }
     }
 }
 
@@ -511,6 +621,9 @@ struct SettingsView: View {
 
             GroupBox("OpenAI API") {
                 VStack(alignment: .leading, spacing: 10) {
+                    Text(controller.hasSavedAPIKey ? "現在: APIキー設定済み" : "現在: APIキー未設定")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(controller.hasSavedAPIKey ? .green : .orange)
                     SecureField("sk-...", text: $controller.apiKeyDraft)
                     HStack {
                         Button("APIキーを保存") {

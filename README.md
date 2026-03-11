@@ -79,6 +79,7 @@ python main.py --config config.toml --mic-button
 - オフライン補助: [offline_transcribe.py](/Users/hasegawaatsuki/Documents/New%20project/voice/offline_transcribe.py)
 
 アプリでできること:
+- Finder / Dock で分かりやすいマイク系アプリアイコン
 - 小さいマイクUI
 - `そのまま` と `AIで整える` の2種類の録音ボタン
 - 録音中の波形表示と状態表示
@@ -93,6 +94,7 @@ python main.py --config config.toml --mic-button
 - 履歴保存
 - Paste Last / Copy Last
 - 今月の使用量表示
+- 右上の `設定` ボタンから初期設定
 
 ## 重要: macの権限
 

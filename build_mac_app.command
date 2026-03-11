@@ -15,6 +15,9 @@ mkdir -p "${APP_DIR}/Contents/MacOS"
 mkdir -p "${APP_DIR}/Contents/Resources"
 
 cp "${EXECUTABLE_PATH}" "${APP_DIR}/Contents/MacOS/VoiceMacApp"
+if [[ -f "${PACKAGE_DIR}/Resources/AppIcon.icns" ]]; then
+  cp "${PACKAGE_DIR}/Resources/AppIcon.icns" "${APP_DIR}/Contents/Resources/AppIcon.icns"
+fi
 
 cat > "${APP_DIR}/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -25,6 +28,8 @@ cat > "${APP_DIR}/Contents/Info.plist" <<EOF
   <string>ja</string>
   <key>CFBundleExecutable</key>
   <string>VoiceMacApp</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>CFBundleIdentifier</key>
   <string>com.haseatsu.voiceinput.macapp</string>
   <key>CFBundleInfoDictionaryVersion</key>

@@ -91,6 +91,14 @@ final class VoiceInputAppController: ObservableObject {
         "録音キー: \(settings.recordShortcut.displayString) / \(settings.defaultCaptureMode.title)"
     }
 
+    var hasSavedAPIKey: Bool {
+        !apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var apiSetupStatusText: String {
+        hasSavedAPIKey ? "API設定済み" : "API未設定"
+    }
+
     var recordingElapsedText: String {
         let minutes = Int(recordingElapsedSeconds) / 60
         let seconds = Int(recordingElapsedSeconds) % 60
@@ -134,6 +142,7 @@ final class VoiceInputAppController: ObservableObject {
             stopRecording(trigger: "manual")
             return
         }
+        guard ensureCaptureModeIsReady(settings.defaultCaptureMode) else { return }
         startRecording(captureMode: settings.defaultCaptureMode)
     }
 
@@ -142,6 +151,7 @@ final class VoiceInputAppController: ObservableObject {
             stopRecording(trigger: "manual")
             return
         }
+        guard ensureCaptureModeIsReady(captureMode) else { return }
         startRecording(captureMode: captureMode)
     }
 
@@ -376,6 +386,18 @@ final class VoiceInputAppController: ObservableObject {
 
     private func refreshMonthlyStats() {
         monthlyStats = historyStore.currentMonthStats()
+    }
+
+    private func ensureCaptureModeIsReady(_ captureMode: CaptureMode) -> Bool {
+        guard captureMode == .aiPolish else { return true }
+        guard hasSavedAPIKey else {
+            showingSettings = true
+            apiConnectionMessage = "先に設定 → OpenAI API で APIキーを保存してください。"
+            status = .error("AIで整えるにはAPI設定が必要です。")
+            errorMessage = "AIで整えるにはAPI設定が必要です。"
+            return false
+        }
+        return true
     }
 }
 
