@@ -126,7 +126,9 @@ struct StandardMicView: View {
                 }
             }
         }
-        .padding(18)
+        .padding(.top, 44)
+        .padding(.horizontal, 18)
+        .padding(.bottom, 18)
         .background(WindowBackground())
     }
 }
@@ -185,7 +187,9 @@ struct CompactMicView: View {
                     .help("履歴を開く")
             }
         }
-        .padding(12)
+        .padding(.top, 38)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 12)
         .background(WindowBackground())
     }
 }
