@@ -79,7 +79,7 @@ enum InterfaceMode: String, CaseIterable, Identifiable, Codable {
     var windowSize: CGSize {
         switch self {
         case .standard:
-            return CGSize(width: 380, height: 656)
+            return CGSize(width: 360, height: 560)
         case .compact:
             return CGSize(width: 180, height: 278)
         }

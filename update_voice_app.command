@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_PATH="${HOME}/Applications/Voice Input.app"
-PROCESS_PATH="${APP_PATH}/Contents/MacOS/VoiceMacApp"
+DESKTOP_APP_PATH="${HOME}/Desktop/Voice Input.app"
 
 cd "${ROOT_DIR}"
 
@@ -24,11 +24,11 @@ echo "アプリを再生成しています..."
 
 echo ""
 echo "古いアプリを終了しています..."
-pkill -f "${PROCESS_PATH}" || true
+pkill -x "VoiceMacApp" || true
 sleep 1
 
 echo "最新版を起動しています..."
-open "${APP_PATH}"
+open "${DESKTOP_APP_PATH}"
 
 echo ""
 echo "更新が終わりました。"

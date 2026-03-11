@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PACKAGE_DIR="${ROOT_DIR}/VoiceMacApp"
 APP_NAME="Voice Input"
 APP_DIR="${HOME}/Applications/${APP_NAME}.app"
+DESKTOP_APP_DIR="${HOME}/Desktop/${APP_NAME}.app"
 BIN_PATH="$(cd "${PACKAGE_DIR}" && swift build -c release --show-bin-path)"
 EXECUTABLE_PATH="${BIN_PATH}/VoiceMacApp"
 
@@ -53,10 +54,11 @@ EOF
 touch "${APP_DIR}/Contents/PkgInfo"
 codesign --force --deep -s - "${APP_DIR}" >/dev/null 2>&1 || true
 
-ln -sfn "${APP_DIR}" "${HOME}/Desktop/${APP_NAME}.app"
+rm -rf "${DESKTOP_APP_DIR}"
+ditto "${APP_DIR}" "${DESKTOP_APP_DIR}"
 
 echo "Built app:"
 echo "${APP_DIR}"
 echo ""
-echo "Desktop shortcut:"
-echo "${HOME}/Desktop/${APP_NAME}.app"
+echo "Desktop app:"
+echo "${DESKTOP_APP_DIR}"
