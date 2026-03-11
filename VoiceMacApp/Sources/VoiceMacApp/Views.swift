@@ -690,23 +690,53 @@ struct WaveformView: View {
             RoundedRectangle(cornerRadius: 14)
                 .fill(tint.opacity(isActive ? 0.10 : 0.05))
 
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(isActive ? 0.24 : 0.12))
+                .frame(height: 2)
+                .padding(.horizontal, 12)
+
             HStack(alignment: .center, spacing: 4) {
-                ForEach(Array(levels.enumerated()), id: \.offset) { _, level in
+                ForEach(Array(levels.enumerated()), id: \.offset) { index, level in
+                    let progress = Double(index + 1) / Double(max(levels.count, 1))
+                    let isLatest = index == levels.count - 1
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: [tint.opacity(isActive ? 0.98 : 0.55), tint.opacity(isActive ? 0.62 : 0.30)],
+                                colors: [
+                                    tint.opacity(isActive ? (0.22 + progress * 0.78) : (0.18 + progress * 0.34)),
+                                    tint.opacity(isActive ? (0.10 + progress * 0.46) : (0.10 + progress * 0.16))
+                                ],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
-                        .frame(width: 7, height: max(8, CGFloat(level) * 36))
+                        .overlay {
+                            if isActive && isLatest {
+                                Capsule()
+                                    .stroke(Color.white.opacity(0.65), lineWidth: 1)
+                                    .blur(radius: 0.2)
+                            }
+                        }
+                        .frame(width: isLatest ? 8 : 6, height: max(8, 8 + CGFloat(level) * 30))
                         .shadow(color: tint.opacity(isActive ? 0.28 : 0.10), radius: 5, y: 1)
                         .animation(.easeOut(duration: 0.1), value: level)
                 }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
+
+            if isActive {
+                HStack {
+                    Spacer()
+                    Circle()
+                        .fill(tint.opacity(0.95))
+                        .frame(width: 7, height: 7)
+                        .shadow(color: tint.opacity(0.35), radius: 4)
+                        .padding(.trailing, 10)
+                        .padding(.top, 8)
+                        .frame(maxHeight: .infinity, alignment: .topTrailing)
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .center)
     }
