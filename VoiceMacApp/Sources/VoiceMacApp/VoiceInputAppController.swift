@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import Combine
 import Foundation
 import SwiftUI
@@ -36,6 +37,7 @@ final class VoiceInputAppController: ObservableObject {
     private let soundCuePlayer = SoundCuePlayer.shared
     private let systemAudioMuteService = SystemAudioMuteService()
     private var cancellables: Set<AnyCancellable> = []
+    private var lastExternalApplication: NSRunningApplication?
 
     init(settings: SettingsStore = SettingsStore()) {
         self.settings = settings
@@ -47,6 +49,18 @@ final class VoiceInputAppController: ObservableObject {
         settings.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+
+        NSWorkspace.shared.notificationCenter
+            .publisher(for: NSWorkspace.didActivateApplicationNotification)
+            .compactMap { $0.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication }
+            .sink { [weak self] application in
+                self?.rememberExternalApplicationIfNeeded(application)
+            }
+            .store(in: &cancellables)
+
+        if let frontmostApplication = NSWorkspace.shared.frontmostApplication {
+            rememberExternalApplicationIfNeeded(frontmostApplication)
+        }
 
         settings.$recordShortcut
             .sink { shortcut in
@@ -287,6 +301,9 @@ final class VoiceInputAppController: ObservableObject {
     private func startRecording(captureMode: CaptureMode) {
         settings.defaultCaptureMode = .aiPolish
         activeCaptureMode = captureMode
+        if let frontmostApplication = NSWorkspace.shared.frontmostApplication {
+            rememberExternalApplicationIfNeeded(frontmostApplication)
+        }
 
         Task {
             let granted = await recorder.requestPermission()
@@ -442,6 +459,21 @@ final class VoiceInputAppController: ObservableObject {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
 
+        guard AXIsProcessTrusted() else {
+            status = .error("自動貼り付けにはアクセシビリティ権限が必要です。")
+            errorMessage = "システム設定 > プライバシーとセキュリティ > アクセシビリティ で Voice Input.app を許可してください。"
+            return
+        }
+
+        let targetApplication = resolvedPasteTargetApplication()
+        targetApplication?.activate(options: [.activateIgnoringOtherApps])
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
+            self?.postCommandV()
+        }
+    }
+
+    private func postCommandV() {
         let source = CGEventSource(stateID: .hidSystemState)
         let commandDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
         commandDown?.flags = .maskCommand
@@ -455,6 +487,21 @@ final class VoiceInputAppController: ObservableObject {
         vDown?.post(tap: .cghidEventTap)
         vUp?.post(tap: .cghidEventTap)
         commandUp?.post(tap: .cghidEventTap)
+    }
+
+    private func resolvedPasteTargetApplication() -> NSRunningApplication? {
+        if let lastExternalApplication, !lastExternalApplication.isTerminated {
+            return lastExternalApplication
+        }
+        if let frontmostApplication = NSWorkspace.shared.frontmostApplication {
+            rememberExternalApplicationIfNeeded(frontmostApplication)
+        }
+        return lastExternalApplication
+    }
+
+    private func rememberExternalApplicationIfNeeded(_ application: NSRunningApplication) {
+        guard application.bundleIdentifier != Bundle.main.bundleIdentifier else { return }
+        lastExternalApplication = application
     }
 
     private func pushAudioLevel(_ level: Double) {
