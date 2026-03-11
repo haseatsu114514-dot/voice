@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import json
 import plistlib
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -32,6 +34,7 @@ except ModuleNotFoundError:  # pragma: no cover
 DEFAULT_RECORD_HOTKEY = "<cmd>+<shift>+space" if sys.platform == "darwin" else "<ctrl>+<alt>+space"
 DEFAULT_LEARN_HOTKEY = "<cmd>+<shift>+l" if sys.platform == "darwin" else "<ctrl>+<alt>+l"
 LAUNCH_AGENT_LABEL = "com.haseatsu.voiceinput"
+CONFIG_EXAMPLE_NAME = "config.example.toml"
 
 
 @dataclass
@@ -56,6 +59,9 @@ class AppConfig:
     auto_stop_silence_sec: float = 1.2
     auto_stop_min_record_sec: float = 0.7
     silence_level_threshold: float = 0.01
+    mic_button_window_title: str = "Voice Input"
+    mic_button_always_on_top: bool = True
+    transcript_history_file: str = "transcript_history.jsonl"
 
 
 @dataclass
@@ -108,6 +114,49 @@ def _save_toml_data(data: dict[str, Any], path: Path) -> None:
     path.write_text(tomli_w.dumps(data), encoding="utf-8")
 
 
+def ensure_config_exists(config_path: Path, script_dir: Path) -> bool:
+    if config_path.exists():
+        return False
+
+    example_path = script_dir / CONFIG_EXAMPLE_NAME
+    if example_path.exists():
+        shutil.copyfile(example_path, config_path)
+        return True
+
+    fallback_config = {
+        "app": {
+            "hotkey": DEFAULT_RECORD_HOTKEY,
+            "learn_hotkey": DEFAULT_LEARN_HOTKEY,
+            "sample_rate": 16000,
+            "language": "ja",
+            "model_name": "large-v3",
+            "model_device": "auto",
+            "compute_type": "int8_float16",
+            "beam_size": 5,
+            "vad_filter": True,
+            "paste_after_transcribe": True,
+            "use_common_replacements": True,
+            "common_replacements_file": "common_replacements_ja.toml",
+            "use_user_replacements": True,
+            "user_replacements_file": "user_replacements_ja.toml",
+            "auto_stop_silence_enabled": True,
+            "auto_stop_silence_sec": 1.2,
+            "auto_stop_min_record_sec": 0.7,
+            "silence_level_threshold": 0.01,
+            "mic_button_window_title": "Voice Input",
+            "mic_button_always_on_top": True,
+            "transcript_history_file": "transcript_history.jsonl",
+        },
+        "normalization": {
+            "remove_fillers": True,
+            "fillers": ["えーと", "えっと", "あの", "その", "うーん", "えー"],
+            "replacements": {},
+        },
+    }
+    _save_toml_data(fallback_config, config_path)
+    return True
+
+
 def load_config(path: Path) -> Config:
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     app_data = data.get("app", {})
@@ -145,6 +194,15 @@ def load_config(path: Path) -> Config:
         ),
         silence_level_threshold=float(
             app_data.get("silence_level_threshold", AppConfig.silence_level_threshold)
+        ),
+        mic_button_window_title=str(
+            app_data.get("mic_button_window_title", AppConfig.mic_button_window_title)
+        ),
+        mic_button_always_on_top=bool(
+            app_data.get("mic_button_always_on_top", AppConfig.mic_button_always_on_top)
+        ),
+        transcript_history_file=str(
+            app_data.get("transcript_history_file", AppConfig.transcript_history_file)
         ),
     )
 
@@ -351,7 +409,7 @@ class LaunchAgentManager:
                 str(script_path),
                 "--config",
                 str(config_path),
-                "--tray",
+                "--mic-button",
             ],
             "RunAtLoad": True,
             "KeepAlive": True,
@@ -398,6 +456,8 @@ class VoiceInputEngine:
         self._last_voice_at = 0.0
         self._state_lock = threading.Lock()
         self._hotkeys_started = False
+        self._status = "idle"
+        self._last_error = ""
 
         self.last_output_text = ""
         self.last_raw_text = ""
@@ -441,11 +501,14 @@ class VoiceInputEngine:
         self._recording = True
         self._record_started_at = now
         self._last_voice_at = now
+        self._status = "recording"
+        self._last_error = ""
         print("[INFO] Recording started.", flush=True)
 
     def _stop_recording(self, reason: str) -> None:
         audio = self.recorder.stop()
         self._recording = False
+        self._status = "transcribing"
         print(f"[INFO] Recording stopped ({reason}). Transcribing...", flush=True)
         threading.Thread(target=self._process_audio, args=(audio,), daemon=True).start()
 
@@ -478,6 +541,8 @@ class VoiceInputEngine:
 
     def _process_audio(self, audio: np.ndarray) -> None:
         if audio.size == 0:
+            with self._state_lock:
+                self._status = "idle"
             print("[WARN] No audio captured.", flush=True)
             return
 
@@ -485,12 +550,33 @@ class VoiceInputEngine:
             raw_text = self.transcriber.transcribe(audio)
             normalized = self.normalizer.normalize(raw_text)
 
-            self.last_raw_text = raw_text
-            self.last_output_text = normalized
+            with self._state_lock:
+                self.last_raw_text = raw_text
+                self.last_output_text = normalized
+                self._status = "idle"
+                self._last_error = ""
 
+            self._append_history(raw_text, normalized)
             self.inserter.insert(normalized)
         except Exception as exc:  # noqa: BLE001
+            with self._state_lock:
+                self._status = "error"
+                self._last_error = str(exc)
             print(f"[ERROR] {exc}", flush=True)
+
+    def _history_path(self) -> Path:
+        return _resolve_relative_path(self.config_path, self.config.app.transcript_history_file)
+
+    def _append_history(self, raw_text: str, normalized_text: str) -> None:
+        history_path = self._history_path()
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "raw_text": raw_text,
+            "normalized_text": normalized_text,
+        }
+        with history_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     def _user_replacements_path(self) -> Path:
         return _resolve_relative_path(self.config_path, self.config.app.user_replacements_file)
@@ -499,29 +585,34 @@ class VoiceInputEngine:
         refreshed = load_config(self.config_path)
         self.normalizer.update_replacements(refreshed.normalization.replacements)
 
-    def learn_from_clipboard(self) -> None:
+    def learn_from_clipboard(self) -> str:
         if not self.config.app.use_user_replacements:
-            print("[WARN] User replacements are disabled in config.", flush=True)
-            return
+            message = "User replacements are disabled in config."
+            print(f"[WARN] {message}", flush=True)
+            return message
 
         source_text = self.last_output_text.strip()
         if not source_text:
-            print("[WARN] No previous transcription found to learn from.", flush=True)
-            return
+            message = "No previous transcription found to learn from."
+            print(f"[WARN] {message}", flush=True)
+            return message
 
         corrected_text = pyperclip.paste().strip()
         if not corrected_text:
-            print("[WARN] Clipboard is empty. Copy corrected text first.", flush=True)
-            return
+            message = "Clipboard is empty. Copy corrected text first."
+            print(f"[WARN] {message}", flush=True)
+            return message
 
         if corrected_text == source_text:
-            print("[INFO] Clipboard text is same as last output. Nothing to learn.", flush=True)
-            return
+            message = "Clipboard text is same as last output. Nothing to learn."
+            print(f"[INFO] {message}", flush=True)
+            return message
 
         learned_pairs = extract_learning_pairs(source_text, corrected_text)
         if not learned_pairs:
-            print("[INFO] No reliable replacement pairs were detected.", flush=True)
-            return
+            message = "No reliable replacement pairs were detected."
+            print(f"[INFO] {message}", flush=True)
+            return message
 
         replacements_path = self._user_replacements_path()
         replacements_path.parent.mkdir(parents=True, exist_ok=True)
@@ -535,16 +626,50 @@ class VoiceInputEngine:
                 new_count += 1
 
         if new_count == 0:
-            print("[INFO] Learned pairs already exist in user dictionary.", flush=True)
-            return
+            message = "Learned pairs already exist in user dictionary."
+            print(f"[INFO] {message}", flush=True)
+            return message
 
         _save_toml_data({"replacements": existing}, replacements_path)
         self._reload_replacements_only()
-        print(f"[LEARN] Added {new_count} replacements to {replacements_path}", flush=True)
+        message = f"Added {new_count} replacements to {replacements_path}"
+        print(f"[LEARN] {message}", flush=True)
+        return message
 
     def is_recording(self) -> bool:
         with self._state_lock:
             return self._recording
+
+    def toggle_recording(self) -> None:
+        self._toggle_recording()
+
+    def copy_last_output(self) -> None:
+        with self._state_lock:
+            text = self.last_output_text.strip()
+
+        if not text:
+            raise RuntimeError("No previous transcription to copy.")
+        pyperclip.copy(text)
+
+    def paste_last_output(self) -> None:
+        with self._state_lock:
+            text = self.last_output_text.strip()
+
+        if not text:
+            raise RuntimeError("No previous transcription to paste.")
+        self.inserter.insert(text)
+
+    def history_path(self) -> Path:
+        return self._history_path()
+
+    def state_snapshot(self) -> dict[str, str]:
+        with self._state_lock:
+            return {
+                "status": self._status,
+                "last_output_text": self.last_output_text,
+                "last_error": self._last_error,
+                "recording": "1" if self._recording else "0",
+            }
 
     def reload_full_config(self) -> None:
         with self._state_lock:
@@ -571,6 +696,7 @@ class VoiceInputEngine:
             if self._recording:
                 self.recorder.stop()
                 self._recording = False
+            self._status = "idle"
         self.stop_hotkeys()
 
 
@@ -633,6 +759,8 @@ def _open_settings_window(config_path: Path) -> int:
     )
     auto_stop_sec_var = tk.StringVar(value=str(app_data.get("auto_stop_silence_sec", 1.2)))
     silence_threshold_var = tk.StringVar(value=str(app_data.get("silence_level_threshold", 0.01)))
+    window_title_var = tk.StringVar(value=str(app_data.get("mic_button_window_title", "Voice Input")))
+    always_on_top_var = tk.BooleanVar(value=bool(app_data.get("mic_button_always_on_top", True)))
 
     paste_var = tk.BooleanVar(value=bool(app_data.get("paste_after_transcribe", True)))
     use_common_var = tk.BooleanVar(value=bool(app_data.get("use_common_replacements", True)))
@@ -667,6 +795,8 @@ def _open_settings_window(config_path: Path) -> int:
     add_label_and_widget("無音自動停止を使う", ttk.Checkbutton(root, variable=auto_stop_enabled_var))
     add_label_and_widget("無音停止までの秒数", ttk.Entry(root, textvariable=auto_stop_sec_var))
     add_label_and_widget("無音判定しきい値", ttk.Entry(root, textvariable=silence_threshold_var))
+    add_label_and_widget("マイクボタンのタイトル", ttk.Entry(root, textvariable=window_title_var))
+    add_label_and_widget("マイクボタンを最前面表示", ttk.Checkbutton(root, variable=always_on_top_var))
     add_label_and_widget("文字起こし後に自動貼り付け", ttk.Checkbutton(root, variable=paste_var))
     add_label_and_widget("共通辞書を使う", ttk.Checkbutton(root, variable=use_common_var))
     add_label_and_widget("学習辞書を使う", ttk.Checkbutton(root, variable=use_user_var))
@@ -681,6 +811,8 @@ def _open_settings_window(config_path: Path) -> int:
             app_data["auto_stop_silence_enabled"] = bool(auto_stop_enabled_var.get())
             app_data["auto_stop_silence_sec"] = float(auto_stop_sec_var.get().strip())
             app_data["silence_level_threshold"] = float(silence_threshold_var.get().strip())
+            app_data["mic_button_window_title"] = window_title_var.get().strip() or "Voice Input"
+            app_data["mic_button_always_on_top"] = bool(always_on_top_var.get())
             app_data["paste_after_transcribe"] = bool(paste_var.get())
             app_data["use_common_replacements"] = bool(use_common_var.get())
             app_data["use_user_replacements"] = bool(use_user_var.get())
@@ -760,8 +892,8 @@ def run_tray_app(engine: VoiceInputEngine, config_path: Path) -> int:
         @rumps.clicked("修正を学習(クリップボード)")
         def on_learn(self, _sender: Any) -> None:
             try:
-                engine.learn_from_clipboard()
-                rumps.notification("Voice Input", "学習", "クリップボードから学習しました。")
+                result = engine.learn_from_clipboard()
+                rumps.notification("Voice Input", "学習", result)
             except Exception as exc:  # noqa: BLE001
                 rumps.alert(f"学習エラー: {exc}")
 
@@ -823,6 +955,256 @@ def run_tray_app(engine: VoiceInputEngine, config_path: Path) -> int:
     return 0
 
 
+def run_mic_button_app(engine: VoiceInputEngine, config_path: Path) -> int:
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+    except Exception as exc:  # noqa: BLE001
+        print(f"[ERROR] tkinter is not available: {exc}", file=sys.stderr)
+        return 1
+
+    root = tk.Tk()
+    root.title(engine.config.app.mic_button_window_title)
+    root.geometry("240x270")
+    root.resizable(False, False)
+    root.configure(bg="#111827")
+    root.attributes("-topmost", engine.config.app.mic_button_always_on_top)
+
+    status_var = tk.StringVar(value="Ready")
+    hint_var = tk.StringVar(value=f"Hotkey: {engine.config.app.hotkey}")
+    preview_var = tk.StringVar(value="ここに最後の文字起こし結果が表示されます")
+
+    title_label = tk.Label(
+        root,
+        text=engine.config.app.mic_button_window_title,
+        bg="#111827",
+        fg="#F9FAFB",
+        font=("Helvetica", 16, "bold"),
+    )
+    title_label.pack(pady=(16, 8))
+
+    status_label = tk.Label(
+        root,
+        textvariable=status_var,
+        bg="#111827",
+        fg="#9CA3AF",
+        font=("Helvetica", 11),
+    )
+    status_label.pack()
+
+    mic_button = tk.Button(
+        root,
+        text="MIC",
+        command=lambda: _on_toggle(),
+        bg="#2563EB",
+        fg="#FFFFFF",
+        activebackground="#1D4ED8",
+        activeforeground="#FFFFFF",
+        relief="flat",
+        width=10,
+        height=3,
+        font=("Helvetica", 18, "bold"),
+        cursor="hand2",
+    )
+    mic_button.pack(pady=16)
+
+    hint_label = tk.Label(
+        root,
+        textvariable=hint_var,
+        bg="#111827",
+        fg="#D1D5DB",
+        font=("Helvetica", 10),
+    )
+    hint_label.pack()
+
+    preview_label = tk.Label(
+        root,
+        textvariable=preview_var,
+        wraplength=210,
+        justify="left",
+        bg="#1F2937",
+        fg="#F9FAFB",
+        padx=12,
+        pady=10,
+        font=("Helvetica", 10),
+        height=4,
+    )
+    preview_label.pack(fill="x", padx=12, pady=(14, 10))
+
+    action_frame = tk.Frame(root, bg="#111827")
+    action_frame.pack(fill="x", padx=12, pady=(0, 12))
+
+    def _open_settings() -> None:
+        subprocess.Popen([
+            str(Path(sys.executable)),
+            str(Path(__file__).resolve()),
+            "--config",
+            str(config_path),
+            "--settings",
+        ])
+
+    settings_button = tk.Button(
+        action_frame,
+        text="Settings",
+        command=_open_settings,
+        relief="flat",
+        bg="#374151",
+        fg="#F9FAFB",
+        activebackground="#4B5563",
+        activeforeground="#FFFFFF",
+        padx=10,
+        pady=6,
+    )
+    settings_button.pack(side="left")
+
+    def _learn_now() -> None:
+        try:
+            result = engine.learn_from_clipboard()
+            messagebox.showinfo("Voice Input", result)
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror("Voice Input", str(exc))
+
+    learn_button = tk.Button(
+        action_frame,
+        text="Learn",
+        command=_learn_now,
+        relief="flat",
+        bg="#374151",
+        fg="#F9FAFB",
+        activebackground="#4B5563",
+        activeforeground="#FFFFFF",
+        padx=10,
+        pady=6,
+    )
+    learn_button.pack(side="left", padx=(8, 0))
+
+    def _paste_last() -> None:
+        try:
+            engine.paste_last_output()
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror("Voice Input", str(exc))
+
+    paste_button = tk.Button(
+        action_frame,
+        text="Paste Last",
+        command=_paste_last,
+        relief="flat",
+        bg="#374151",
+        fg="#F9FAFB",
+        activebackground="#4B5563",
+        activeforeground="#FFFFFF",
+        padx=10,
+        pady=6,
+    )
+    paste_button.pack(side="left", padx=(8, 0))
+
+    utility_frame = tk.Frame(root, bg="#111827")
+    utility_frame.pack(fill="x", padx=12, pady=(0, 12))
+
+    def _copy_last() -> None:
+        try:
+            engine.copy_last_output()
+            messagebox.showinfo("Voice Input", "最後の文字起こし結果をコピーしました。")
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror("Voice Input", str(exc))
+
+    copy_button = tk.Button(
+        utility_frame,
+        text="Copy Last",
+        command=_copy_last,
+        relief="flat",
+        bg="#374151",
+        fg="#F9FAFB",
+        activebackground="#4B5563",
+        activeforeground="#FFFFFF",
+        padx=10,
+        pady=6,
+    )
+    copy_button.pack(side="left")
+
+    def _open_history() -> None:
+        history_path = engine.history_path()
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        history_path.touch(exist_ok=True)
+        if sys.platform == "darwin":
+            subprocess.run(["open", str(history_path)], check=False)
+        else:
+            messagebox.showinfo("History", str(history_path))
+
+    history_button = tk.Button(
+        utility_frame,
+        text="Open History",
+        command=_open_history,
+        relief="flat",
+        bg="#374151",
+        fg="#F9FAFB",
+        activebackground="#4B5563",
+        activeforeground="#FFFFFF",
+        padx=10,
+        pady=6,
+    )
+    history_button.pack(side="left", padx=(8, 0))
+
+    def _on_close() -> None:
+        engine.shutdown()
+        root.destroy()
+
+    close_button = tk.Button(
+        action_frame,
+        text="Quit",
+        command=_on_close,
+        relief="flat",
+        bg="#7F1D1D",
+        fg="#FFFFFF",
+        activebackground="#991B1B",
+        activeforeground="#FFFFFF",
+        padx=10,
+        pady=6,
+    )
+    close_button.pack(side="right")
+
+    def _on_toggle() -> None:
+        try:
+            engine.toggle_recording()
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror("Voice Input", str(exc))
+
+    def _refresh() -> None:
+        engine.check_auto_stop()
+        snapshot = engine.state_snapshot()
+        status = snapshot["status"]
+
+        if status == "recording":
+            status_var.set("Listening...")
+            mic_button.configure(bg="#DC2626", activebackground="#B91C1C", text="STOP")
+        elif status == "transcribing":
+            status_var.set("Processing...")
+            mic_button.configure(bg="#D97706", activebackground="#B45309", text="WAIT")
+        elif status == "error":
+            status_var.set("Error")
+            mic_button.configure(bg="#7C3AED", activebackground="#6D28D9", text="MIC")
+        else:
+            status_var.set("Ready")
+            mic_button.configure(bg="#2563EB", activebackground="#1D4ED8", text="MIC")
+
+        preview_text = snapshot["last_output_text"].strip()
+        error_text = snapshot["last_error"].strip()
+        if error_text:
+            preview_var.set(error_text[:120])
+        elif preview_text:
+            preview_var.set(preview_text[:120])
+        else:
+            preview_var.set("ここに最後の文字起こし結果が表示されます")
+
+        root.after(250, _refresh)
+
+    root.protocol("WM_DELETE_WINDOW", _on_close)
+    engine.start_hotkeys()
+    _refresh()
+    root.mainloop()
+    return 0
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Hotkey-driven voice input tool")
     parser.add_argument(
@@ -832,6 +1214,11 @@ def parse_args() -> argparse.Namespace:
         help="Path to TOML config",
     )
     parser.add_argument("--tray", action="store_true", help="Run as a menu bar app (macOS)")
+    parser.add_argument(
+        "--mic-button",
+        action="store_true",
+        help="Run a simple desktop mic button UI",
+    )
     parser.add_argument("--settings", action="store_true", help="Open simple settings GUI")
     parser.add_argument("--install-login-item", action="store_true", help="Enable auto start at login (macOS)")
     parser.add_argument("--uninstall-login-item", action="store_true", help="Disable auto start at login (macOS)")
@@ -840,14 +1227,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    script_path = Path(__file__).resolve()
     config_path = args.config.resolve()
+
+    created_config = ensure_config_exists(config_path, script_path.parent)
+    if created_config:
+        print(f"[INFO] Created config file: {config_path}", flush=True)
 
     if args.settings:
         return _open_settings_window(config_path)
-
-    if not config_path.exists():
-        print(f"[ERROR] Config not found: {config_path}", file=sys.stderr)
-        return 1
 
     if args.install_login_item:
         if sys.platform != "darwin":
@@ -856,7 +1244,7 @@ def main() -> int:
 
         plist_path = LaunchAgentManager.install(
             python_executable=Path(sys.executable).resolve(),
-            script_path=Path(__file__).resolve(),
+            script_path=script_path,
             config_path=config_path,
         )
         print(f"[INFO] Login item installed: {plist_path}")
@@ -873,6 +1261,9 @@ def main() -> int:
 
     config = load_config(config_path)
     engine = VoiceInputEngine(config=config, config_path=config_path)
+
+    if args.mic_button:
+        return run_mic_button_app(engine, config_path)
 
     if args.tray:
         return run_tray_app(engine, config_path)

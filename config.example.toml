@@ -35,6 +35,13 @@ auto_stop_silence_sec = 1.2
 auto_stop_min_record_sec = 0.7
 silence_level_threshold = 0.01
 
+# TypelessっぽいマイクボタンUI
+mic_button_window_title = "Voice Input"
+mic_button_always_on_top = true
+
+# 失敗時の取りこぼし防止用ログ
+transcript_history_file = "transcript_history.jsonl"
+
 [normalization]
 remove_fillers = true
 fillers = ["えーと", "えっと", "あの", "その", "うーん", "えー"]
