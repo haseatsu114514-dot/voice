@@ -42,6 +42,9 @@ final class VoiceInputAppController: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
     private var lastExternalApplication: NSRunningApplication?
     private var processingTargetApplication: NSRunningApplication?
+    private var lastPasteTargetSelectionAt: Date?
+    private var globalMouseMonitor: Any?
+    private var localMouseMonitor: Any?
 
     private enum PasteDeliveryResult {
         case success
@@ -70,12 +73,21 @@ final class VoiceInputAppController: ObservableObject {
                       application.bundleIdentifier != Bundle.main.bundleIdentifier else { return }
                 if self.status.isProcessing {
                     self.processingTargetApplication = application
+                    self.lastPasteTargetSelectionAt = Date()
                 }
             }
             .store(in: &cancellables)
 
         if let frontmostApplication = NSWorkspace.shared.frontmostApplication {
             rememberExternalApplicationIfNeeded(frontmostApplication)
+        }
+
+        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.notePotentialPasteTargetSelection()
+        }
+        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            self?.notePotentialPasteTargetSelection()
+            return event
         }
 
         settings.$recordShortcut
@@ -101,6 +113,15 @@ final class VoiceInputAppController: ObservableObject {
                 self?.recordingElapsedSeconds = elapsed
                 self?.pushAudioLevel(Double(level))
             }
+        }
+    }
+
+    deinit {
+        if let globalMouseMonitor {
+            NSEvent.removeMonitor(globalMouseMonitor)
+        }
+        if let localMouseMonitor {
+            NSEvent.removeMonitor(localMouseMonitor)
         }
     }
 
@@ -416,6 +437,7 @@ final class VoiceInputAppController: ObservableObject {
         settings.defaultCaptureMode = .aiPolish
         activeCaptureMode = captureMode
         processingTargetApplication = nil
+        lastPasteTargetSelectionAt = nil
         if let frontmostApplication = NSWorkspace.shared.frontmostApplication {
             rememberExternalApplicationIfNeeded(frontmostApplication)
         }
@@ -527,11 +549,9 @@ final class VoiceInputAppController: ObservableObject {
             }
 
             lastTranscript = finalText
-            status = .idle
             errorMessage = warningMessage ?? ""
             audioLevels = Array(repeating: 0.08, count: 14)
             activeCaptureMode = nil
-            processingTargetApplication = nil
 
             let pasteCompleted: Bool
             if settings.autoPaste {
@@ -539,12 +559,17 @@ final class VoiceInputAppController: ObservableObject {
             } else {
                 pasteCompleted = false
             }
+            if !status.isError {
+                status = .idle
+            }
             let deliveryErrorMessage = pasteCompleted
                 ? nil
                 : {
                     let trimmed = errorMessage.trimmingCharacters(in: .whitespacesAndNewlines)
                     return trimmed.isEmpty ? nil : trimmed
                 }()
+            processingTargetApplication = nil
+            lastPasteTargetSelectionAt = nil
 
             try? historyStore.append(
                 HistoryEntry(
@@ -568,6 +593,7 @@ final class VoiceInputAppController: ObservableObject {
             audioLevels = Array(repeating: 0.08, count: 14)
             activeCaptureMode = nil
             processingTargetApplication = nil
+            lastPasteTargetSelectionAt = nil
             try? historyStore.append(
                 HistoryEntry(
                     timestamp: Date(),
@@ -608,6 +634,9 @@ final class VoiceInputAppController: ObservableObject {
                 output = output.replacingOccurrences(of: $0, with: "")
             }
         }
+        for pair in settings.customDictionaryPairs {
+            output = output.replacingOccurrences(of: pair.wrong, with: pair.correct)
+        }
         output = output.replacingOccurrences(of: "\n\n\n", with: "\n\n")
         output = output.replacingOccurrences(of: "  ", with: " ")
         return output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -630,6 +659,8 @@ final class VoiceInputAppController: ObservableObject {
             return false
         }
 
+        await waitForPasteTargetSelectionToSettle()
+
         if errorMessage.contains("アクセシビリティ") {
             errorMessage = ""
         }
@@ -646,7 +677,7 @@ final class VoiceInputAppController: ObservableObject {
 
         try? await Task.sleep(nanoseconds: 180_000_000)
 
-        for attempt in 0..<4 {
+        for attempt in 0..<6 {
             if let refreshedTarget = resolvedPasteTargetApplication() {
                 targetApplication = refreshedTarget
             }
@@ -656,13 +687,15 @@ final class VoiceInputAppController: ObservableObject {
                 try? await Task.sleep(nanoseconds: 120_000_000)
             }
 
+            await waitForPasteTargetSelectionToSettle()
+
             switch insertTextDirectly(text, into: targetApplication) {
             case .success:
                 errorMessage = ""
                 refreshAccessibilityStatus()
                 return true
             case .noEditableTarget(let message):
-                if attempt == 3 {
+                if attempt == 5 {
                     status = .error("貼り付け対象に入力欄がありません。")
                     errorMessage = message
                     return false
@@ -671,7 +704,7 @@ final class VoiceInputAppController: ObservableObject {
                 break
             }
 
-            try? await Task.sleep(nanoseconds: 90_000_000)
+            try? await Task.sleep(nanoseconds: 120_000_000)
         }
 
         guard postCommandV(to: targetApplication.processIdentifier) || postCommandV() else {
@@ -898,6 +931,24 @@ final class VoiceInputAppController: ObservableObject {
     private func rememberExternalApplicationIfNeeded(_ application: NSRunningApplication) {
         guard application.bundleIdentifier != Bundle.main.bundleIdentifier else { return }
         lastExternalApplication = application
+    }
+
+    private func notePotentialPasteTargetSelection() {
+        guard status.isProcessing else { return }
+        lastPasteTargetSelectionAt = Date()
+        if let frontmostApplication = NSWorkspace.shared.frontmostApplication,
+           frontmostApplication.bundleIdentifier != Bundle.main.bundleIdentifier {
+            processingTargetApplication = frontmostApplication
+        }
+    }
+
+    private func waitForPasteTargetSelectionToSettle() async {
+        guard let lastPasteTargetSelectionAt else { return }
+        let elapsed = Date().timeIntervalSince(lastPasteTargetSelectionAt)
+        let minimumDelay: Double = 0.28
+        guard elapsed < minimumDelay else { return }
+        let remaining = minimumDelay - elapsed
+        try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
     }
 
     private func pushAudioLevel(_ level: Double) {

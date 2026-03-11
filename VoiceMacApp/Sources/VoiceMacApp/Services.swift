@@ -41,6 +41,7 @@ final class SettingsStore: ObservableObject {
     @Published var autoStopEnabled: Bool { didSet { save() } }
     @Published var autoStopSeconds: Double { didSet { save() } }
     @Published var fillerRemoval: Bool { didSet { save() } }
+    @Published var customDictionaryText: String { didSet { save() } }
     @Published var alwaysOnTop: Bool { didSet { save() } }
     @Published var recordingAudioControlMode: RecordingAudioControlMode { didSet { save() } }
 
@@ -87,6 +88,8 @@ final class SettingsStore: ObservableObject {
         self.autoStopEnabled = defaults.object(forKey: "settings.autoStopEnabled") as? Bool ?? true
         self.autoStopSeconds = defaults.object(forKey: "settings.autoStopSeconds") as? Double ?? 1.2
         self.fillerRemoval = defaults.object(forKey: "settings.fillerRemoval") as? Bool ?? true
+        self.customDictionaryText = defaults.string(forKey: "settings.customDictionaryText")
+            ?? "死者=>シーシャ"
         self.alwaysOnTop = defaults.object(forKey: "settings.alwaysOnTop") as? Bool ?? true
         if let audioControlRaw = defaults.string(forKey: "settings.recordingAudioControlMode"),
            let savedAudioControl = RecordingAudioControlMode(rawValue: audioControlRaw) {
@@ -107,11 +110,32 @@ final class SettingsStore: ObservableObject {
         defaults.set(autoStopEnabled, forKey: "settings.autoStopEnabled")
         defaults.set(autoStopSeconds, forKey: "settings.autoStopSeconds")
         defaults.set(fillerRemoval, forKey: "settings.fillerRemoval")
+        defaults.set(customDictionaryText, forKey: "settings.customDictionaryText")
         defaults.set(alwaysOnTop, forKey: "settings.alwaysOnTop")
         defaults.set(recordingAudioControlMode.rawValue, forKey: "settings.recordingAudioControlMode")
         if let encoded = try? JSONEncoder().encode(recordShortcut) {
             defaults.set(encoded, forKey: "settings.recordShortcut")
         }
+    }
+
+    var customDictionaryPairs: [(wrong: String, correct: String)] {
+        customDictionaryText
+            .split(whereSeparator: \.isNewline)
+            .compactMap { rawLine in
+                let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !line.isEmpty else { return nil }
+
+                for separator in ["=>", "→", "->", "⇒"] {
+                    if let range = line.range(of: separator) {
+                        let wrong = String(line[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                        let correct = String(line[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !wrong.isEmpty, !correct.isEmpty else { return nil }
+                        return (wrong, correct)
+                    }
+                }
+                return nil
+            }
+            .sorted { $0.wrong.count > $1.wrong.count }
     }
 }
 
@@ -632,7 +656,7 @@ final class SystemAudioMuteService {
         case .unchanged:
             success = true
         case .duck:
-            let loweredVolume = min(currentVolume, 20)
+            let loweredVolume = max(2, Int((Double(max(currentVolume, 1)) * 0.2).rounded(.down)))
             success = runAppleScript("set volume output muted false") != nil &&
                 runAppleScript("set volume output volume \(loweredVolume)") != nil
         case .mute:

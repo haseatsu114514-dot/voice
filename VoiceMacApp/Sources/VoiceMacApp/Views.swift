@@ -933,6 +933,25 @@ struct SettingsView: View {
                             }
                         }
 
+                        GroupBox("置換辞書") {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("1行に1つ、`誤認識=>正しい表記` で書きます。")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                TextEditor(text: $controller.settings.customDictionaryText)
+                                    .font(.system(size: 12))
+                                    .frame(minHeight: 90)
+                                    .padding(6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(Color.black.opacity(0.05))
+                                    )
+                                Text("例: 死者=>シーシャ")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
                         DisclosureGroup("今月の使用量", isExpanded: $showingUsageDetails) {
                             UsagePanel(
                                 metrics: controller.monthUsageDetails,
