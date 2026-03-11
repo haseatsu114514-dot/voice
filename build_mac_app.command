@@ -60,7 +60,14 @@ codesign \
   "${APP_DIR}" >/dev/null 2>&1 || true
 
 rm -rf "${DESKTOP_APP_DIR}"
-ln -s "${APP_DIR}" "${DESKTOP_APP_DIR}"
+osascript <<EOF
+tell application "Finder"
+    set targetFile to POSIX file "${APP_DIR}" as alias
+    set desktopFolder to POSIX file "${HOME}/Desktop" as alias
+    set newAlias to make new alias file to targetFile at desktopFolder
+    set name of newAlias to "${APP_NAME}.app"
+end tell
+EOF
 
 echo "Built app:"
 echo "${APP_DIR}"
