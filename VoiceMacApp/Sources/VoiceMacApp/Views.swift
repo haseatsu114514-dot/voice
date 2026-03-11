@@ -20,13 +20,15 @@ struct MainMicView: View {
             minHeight: windowSize.height,
             idealHeight: windowSize.height
         )
-        .background(
-            WindowAccessor(
-                alwaysOnTop: controller.settings.alwaysOnTop,
-                windowSize: windowSize
-            )
-            .allowsHitTesting(false)
-        )
+        .onAppear {
+            WindowConfigurator.scheduleApply(windowSize: windowSize, alwaysOnTop: controller.settings.alwaysOnTop)
+        }
+        .onChange(of: controller.settings.alwaysOnTop) { newValue in
+            WindowConfigurator.scheduleApply(windowSize: windowSize, alwaysOnTop: newValue)
+        }
+        .onChange(of: controller.settings.interfaceMode) { _ in
+            WindowConfigurator.scheduleApply(windowSize: windowSize, alwaysOnTop: controller.settings.alwaysOnTop)
+        }
         .sheet(isPresented: $controller.showingSettings) {
             SettingsView(controller: controller)
         }
@@ -1036,33 +1038,21 @@ final class ShortcutCaptureNSView: NSView {
     }
 }
 
-struct WindowAccessor: NSViewRepresentable {
-    let alwaysOnTop: Bool
-    let windowSize: CGSize
+enum WindowConfigurator {
+    private static var lastAppliedSize: CGSize?
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NonInteractiveNSView()
-        DispatchQueue.main.async {
-            configureWindow(for: view, coordinator: context.coordinator, forceInitialSize: true)
+    static func scheduleApply(windowSize: CGSize, alwaysOnTop: Bool) {
+        apply(windowSize: windowSize, alwaysOnTop: alwaysOnTop)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            apply(windowSize: windowSize, alwaysOnTop: alwaysOnTop)
         }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        if let view = nsView as? NonInteractiveNSView {
-            view.isHidden = true
-        }
-        DispatchQueue.main.async {
-            configureWindow(for: nsView, coordinator: context.coordinator, forceInitialSize: false)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            apply(windowSize: windowSize, alwaysOnTop: alwaysOnTop)
         }
     }
 
-    private func configureWindow(for view: NSView, coordinator: Coordinator, forceInitialSize: Bool) {
-        guard let window = view.window else { return }
+    static func apply(windowSize: CGSize, alwaysOnTop: Bool) {
+        guard let window = NSApplication.shared.windows.first(where: { $0.isVisible }) else { return }
         window.ignoresMouseEvents = false
         window.level = alwaysOnTop ? .floating : .normal
         window.titleVisibility = .hidden
@@ -1071,35 +1061,14 @@ struct WindowAccessor: NSViewRepresentable {
         window.minSize = windowSize
         window.maxSize = CGSize(width: windowSize.width + 80, height: 900)
 
-        if coordinator.lastAppliedWindowSize != windowSize {
+        if lastAppliedSize != windowSize {
             window.setContentSize(windowSize)
-            coordinator.lastAppliedWindowSize = windowSize
-            coordinator.didApplyInitialSize = true
+            lastAppliedSize = windowSize
             return
         }
 
-        if forceInitialSize && !coordinator.didApplyInitialSize {
-            let shouldResetWideWindow = window.frame.size.width > windowSize.width + 80
-            let shouldResetShortWindow = window.frame.size.width < windowSize.width || window.frame.size.height < windowSize.height
-            if shouldResetWideWindow || shouldResetShortWindow {
-                window.setContentSize(windowSize)
-            }
-            coordinator.didApplyInitialSize = true
-        } else if window.frame.size.width < windowSize.width || window.frame.size.height < windowSize.height {
+        if window.frame.size.width < windowSize.width || window.frame.size.height < windowSize.height {
             window.setContentSize(windowSize)
         }
-    }
-
-    final class Coordinator {
-        var didApplyInitialSize = false
-        var lastAppliedWindowSize: CGSize?
-    }
-}
-
-final class NonInteractiveNSView: NSView {
-    override var acceptsFirstResponder: Bool { false }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        return nil
     }
 }
