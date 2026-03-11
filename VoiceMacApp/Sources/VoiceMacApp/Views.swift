@@ -59,7 +59,15 @@ struct StandardMicView: View {
 
             StatusCard(controller: controller)
 
-            RecordingButton(controller: controller, size: 112)
+            HStack(spacing: 10) {
+                ForEach(CaptureMode.allCases) { captureMode in
+                    CaptureModeButton(
+                        controller: controller,
+                        captureMode: captureMode,
+                        compact: false
+                    )
+                }
+            }
 
             GlassPanel {
                 VStack(alignment: .leading, spacing: 10) {
@@ -81,7 +89,7 @@ struct StandardMicView: View {
                     )
                     .frame(height: 42)
 
-                    Text(controller.status.detail)
+                    Text(controller.statusDetailText)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
@@ -141,7 +149,15 @@ struct CompactMicView: View {
                 .help("標準サイズに戻す")
             }
 
-            RecordingButton(controller: controller, size: 74)
+            HStack(spacing: 8) {
+                ForEach(CaptureMode.allCases) { captureMode in
+                    CaptureModeButton(
+                        controller: controller,
+                        captureMode: captureMode,
+                        compact: true
+                    )
+                }
+            }
 
             WaveformView(
                 levels: controller.audioLevels,
@@ -174,46 +190,63 @@ struct CompactMicView: View {
     }
 }
 
-struct RecordingButton: View {
+struct CaptureModeButton: View {
     @ObservedObject var controller: VoiceInputAppController
-    let size: CGFloat
+    let captureMode: CaptureMode
+    let compact: Bool
 
     var body: some View {
-        Button(action: controller.toggleRecording) {
+        let isSelected = controller.isCaptureModeSelected(captureMode)
+        let isRecordingThisMode = controller.activeCaptureMode == captureMode
+        let buttonColor = captureMode == .aiPolish ? Color.orange : Color.blue
+
+        Button(action: {
+            controller.handleCaptureButton(captureMode)
+        }) {
             ZStack {
-                Circle()
+                RoundedRectangle(cornerRadius: compact ? 16 : 22)
                     .fill(
                         LinearGradient(
-                            colors: [controller.statusColor.opacity(0.98), controller.statusColor.opacity(0.7)],
+                            colors: [
+                                buttonColor.opacity(isSelected ? 0.95 : 0.72),
+                                buttonColor.opacity(isSelected ? 0.72 : 0.52)
+                            ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: size, height: size)
+                    .frame(height: compact ? 54 : 116)
 
-                if controller.status.isListening {
-                    Circle()
-                        .stroke(Color.white.opacity(0.35), lineWidth: 4)
-                        .frame(width: size + 14, height: size + 14)
+                if isRecordingThisMode {
+                    RoundedRectangle(cornerRadius: compact ? 16 : 22)
+                        .stroke(Color.white.opacity(0.42), lineWidth: 3)
+                        .padding(4)
                 }
 
-                if controller.status.isProcessing {
+                if controller.status.isProcessing && isSelected {
                     ProgressView()
                         .progressViewStyle(.circular)
                         .tint(.white)
-                        .scaleEffect(1.15)
+                        .scaleEffect(compact ? 0.9 : 1.1)
                 } else {
                     VStack(spacing: 4) {
-                        Image(systemName: "mic.fill")
-                            .font(.system(size: size * 0.22, weight: .bold))
-                        Text(controller.micButtonTitle)
-                            .font(.system(size: size * 0.18, weight: .heavy))
+                        Image(systemName: captureMode.systemImage)
+                            .font(.system(size: compact ? 14 : 22, weight: .bold))
+                        Text(captureMode.title)
+                            .font(.system(size: compact ? 11 : 18, weight: .heavy))
+                        if !compact {
+                            Text(captureMode.subtitle)
+                                .font(.system(size: 11, weight: .medium))
+                                .multilineTextAlignment(.center)
+                        }
                     }
                     .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
                 }
             }
         }
         .buttonStyle(.plain)
+        .disabled(controller.status.isProcessing)
     }
 }
 
@@ -226,10 +259,11 @@ struct StatusCard: View {
                 HStack(spacing: 8) {
                     StatusPill(title: controller.status.title, color: controller.statusColor, compact: false)
                     ModeChip(title: controller.settings.mode.title)
+                    ModeChip(title: controller.selectedCaptureMode.title)
                     Spacer()
                 }
 
-                Text(controller.status.detail)
+                Text(controller.statusDetailText)
                     .font(.system(size: 12))
                     .foregroundStyle(controller.status.isError ? .red : .secondary)
             }
@@ -444,6 +478,20 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
 
                     Text("オフラインはPC内で処理、標準と高精度はOpenAI APIを使います。")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            GroupBox("録音ボタン") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("通常の録音ボタン", selection: $controller.settings.defaultCaptureMode) {
+                        ForEach(CaptureMode.allCases) { captureMode in
+                            Text(captureMode.title).tag(captureMode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Text("ショートカットで開始するときは、このモードが使われます。")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }

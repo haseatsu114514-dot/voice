@@ -8,6 +8,7 @@ import Security
 final class SettingsStore: ObservableObject {
     @Published var mode: AppMode { didSet { save() } }
     @Published var recordShortcut: Shortcut { didSet { save() } }
+    @Published var defaultCaptureMode: CaptureMode { didSet { save() } }
     @Published var interfaceMode: InterfaceMode { didSet { save() } }
     @Published var autoPaste: Bool { didSet { save() } }
     @Published var autoStopEnabled: Bool { didSet { save() } }
@@ -32,6 +33,13 @@ final class SettingsStore: ObservableObject {
             self.recordShortcut = .defaultRecord
         }
 
+        if let captureModeRaw = defaults.string(forKey: "settings.defaultCaptureMode"),
+           let savedCaptureMode = CaptureMode(rawValue: captureModeRaw) {
+            self.defaultCaptureMode = savedCaptureMode
+        } else {
+            self.defaultCaptureMode = .fastRaw
+        }
+
         if let interfaceModeRaw = defaults.string(forKey: "settings.interfaceMode"),
            let savedInterfaceMode = InterfaceMode(rawValue: interfaceModeRaw) {
             self.interfaceMode = savedInterfaceMode
@@ -48,6 +56,7 @@ final class SettingsStore: ObservableObject {
 
     private func save() {
         defaults.set(mode.rawValue, forKey: "settings.mode")
+        defaults.set(defaultCaptureMode.rawValue, forKey: "settings.defaultCaptureMode")
         defaults.set(interfaceMode.rawValue, forKey: "settings.interfaceMode")
         defaults.set(autoPaste, forKey: "settings.autoPaste")
         defaults.set(autoStopEnabled, forKey: "settings.autoStopEnabled")
@@ -107,11 +116,13 @@ final class KeychainService {
 struct HistoryEntry: Codable {
     let timestamp: Date
     let mode: String
+    let captureMode: String?
     let provider: String
     let durationSeconds: Double
     let text: String
     let success: Bool
     let errorMessage: String?
+    let estimatedUSD: Double?
 }
 
 final class HistoryStore {
@@ -160,6 +171,9 @@ final class HistoryStore {
             .filter(\.success)
             .reduce(0) { $0 + $1.text.count }
         let estimatedUSD = entries.reduce(0) { partialResult, entry in
+            if let stored = entry.estimatedUSD {
+                return partialResult + stored
+            }
             guard entry.success,
                   let mode = AppMode(rawValue: entry.mode) else {
                 return partialResult
@@ -356,6 +370,77 @@ struct OpenAITranscriptionService {
         append("--\(boundary)--\r\n")
 
         return body
+    }
+}
+
+struct OpenAITextPolishService {
+    private struct ChatCompletionResponse: Decodable {
+        struct Choice: Decodable {
+            struct Message: Decodable {
+                let content: String
+            }
+
+            let message: Message
+        }
+
+        let choices: [Choice]
+    }
+
+    func polishJapaneseText(_ text: String, apiKey: String) async throws -> String {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return text
+        }
+
+        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let payload: [String: Any] = [
+            "model": "gpt-4.1-mini",
+            "temperature": 0.2,
+            "messages": [
+                [
+                    "role": "system",
+                    "content": "あなたは日本語の音声入力補正アシスタントです。元の意味を変えず、情報を足さず、句読点や文のつながりを自然に整えてください。出力は整えた本文だけにしてください。"
+                ],
+                [
+                    "role": "user",
+                    "content": text
+                ]
+            ]
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "OpenAITextPolishService", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "AI整形の応答を確認できませんでした。"
+            ])
+        }
+
+        guard 200..<300 ~= httpResponse.statusCode else {
+            let body = String(data: data, encoding: .utf8) ?? "AI整形に失敗しました。"
+            throw NSError(domain: "OpenAITextPolishService", code: httpResponse.statusCode, userInfo: [
+                NSLocalizedDescriptionKey: body
+            ])
+        }
+
+        let decoded = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
+        guard let content = decoded.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines),
+              !content.isEmpty else {
+            throw NSError(domain: "OpenAITextPolishService", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "AI整形の結果が空でした。"
+            ])
+        }
+
+        return content
+    }
+
+    func estimatedUSD(inputText: String, outputText: String) -> Double {
+        let inputTokens = Double(inputText.count) * 1.2
+        let outputTokens = Double(outputText.count) * 1.2
+        return (inputTokens * 0.40 / 1_000_000) + (outputTokens * 1.60 / 1_000_000)
     }
 }
 

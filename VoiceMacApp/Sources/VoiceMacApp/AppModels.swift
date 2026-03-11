@@ -86,6 +86,40 @@ enum InterfaceMode: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum CaptureMode: String, CaseIterable, Identifiable, Codable {
+    case fastRaw
+    case aiPolish
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .fastRaw:
+            return "そのまま"
+        case .aiPolish:
+            return "AIで整える"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .fastRaw:
+            return "AIなし・速さ重視"
+        case .aiPolish:
+            return "読みやすく自然に整える"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .fastRaw:
+            return "bolt.fill"
+        case .aiPolish:
+            return "wand.and.stars"
+        }
+    }
+}
+
 enum RecorderStatus: Equatable {
     case idle
     case listening
