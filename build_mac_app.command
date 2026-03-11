@@ -52,7 +52,12 @@ cat > "${APP_DIR}/Contents/Info.plist" <<EOF
 EOF
 
 touch "${APP_DIR}/Contents/PkgInfo"
-codesign --force --deep -s - "${APP_DIR}" >/dev/null 2>&1 || true
+codesign \
+  --force \
+  --deep \
+  -s - \
+  -r='designated => identifier "com.haseatsu.voiceinput.macapp"' \
+  "${APP_DIR}" >/dev/null 2>&1 || true
 
 rm -rf "${DESKTOP_APP_DIR}"
 ditto "${APP_DIR}" "${DESKTOP_APP_DIR}"
