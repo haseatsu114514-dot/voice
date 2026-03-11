@@ -324,14 +324,22 @@ final class RecorderService: NSObject, AVAudioRecorderDelegate {
 }
 
 struct OpenAITranscriptionService {
+    private let session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 45
+        configuration.timeoutIntervalForResource = 60
+        return URLSession(configuration: configuration)
+    }()
+
     private struct TranscriptionResponse: Decodable {
         let text: String
     }
 
     func testConnection(apiKey: String) async throws {
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/models")!)
+        request.timeoutInterval = 15
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse,
               200..<300 ~= httpResponse.statusCode else {
             throw NSError(domain: "OpenAITranscriptionService", code: 1, userInfo: [
@@ -344,11 +352,12 @@ struct OpenAITranscriptionService {
         let boundary = "Boundary-\(UUID().uuidString)"
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/transcriptions")!)
         request.httpMethod = "POST"
+        request.timeoutInterval = 45
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.httpBody = try makeMultipartBody(fileURL: fileURL, model: mode.openAIModelName, boundary: boundary)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NSError(domain: "OpenAITranscriptionService", code: 2, userInfo: [
                 NSLocalizedDescriptionKey: "OpenAIから不正な応答が返りました。"
@@ -394,6 +403,13 @@ struct OpenAITranscriptionService {
 }
 
 struct OpenAITextPolishService {
+    private let session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 20
+        configuration.timeoutIntervalForResource = 30
+        return URLSession(configuration: configuration)
+    }()
+
     private struct ChatCompletionResponse: Decodable {
         struct Choice: Decodable {
             struct Message: Decodable {
@@ -413,6 +429,7 @@ struct OpenAITextPolishService {
 
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
         request.httpMethod = "POST"
+        request.timeoutInterval = 20
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
@@ -432,7 +449,7 @@ struct OpenAITextPolishService {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NSError(domain: "OpenAITextPolishService", code: 1, userInfo: [
                 NSLocalizedDescriptionKey: "AI整形の応答を確認できませんでした。"

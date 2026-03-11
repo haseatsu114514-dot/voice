@@ -433,10 +433,24 @@ final class VoiceInputAppController: ObservableObject {
 
         do {
             let transcriptionMode = captureMode == .fastRaw ? AppMode.offline : settings.mode
-            let baseText = try await transcribeBaseText(fileURL: fileURL, transcriptionMode: transcriptionMode)
+            var warningMessage: String?
+            var usedOfflineFallback = false
+            let baseText: String
+
+            do {
+                baseText = try await transcribeBaseText(fileURL: fileURL, transcriptionMode: transcriptionMode)
+            } catch {
+                guard transcriptionMode != .offline else { throw error }
+                let localizedError = localized(error)
+                baseText = try offline.transcribeAudio(fileURL: fileURL)
+                usedOfflineFallback = true
+                warningMessage = "OpenAI変換がタイムアウトしたため、PC内変換に切り替えました。"
+                errorMessage = warningMessage ?? localizedError
+            }
+
             let normalized = normalize(baseText)
             let finalText: String
-            var estimatedUSD = duration / 60 * transcriptionMode.usdCostPerMinute
+            var estimatedUSD = usedOfflineFallback ? 0 : duration / 60 * transcriptionMode.usdCostPerMinute
 
             switch captureMode {
             case .fastRaw:
@@ -448,18 +462,23 @@ final class VoiceInputAppController: ObservableObject {
                         NSLocalizedDescriptionKey: "AI整形にはOpenAI APIキーが必要です。"
                     ])
                 }
-                let polished = try await polisher.polishJapaneseText(
-                    normalized,
-                    tone: settings.polishTone,
-                    apiKey: key
-                )
-                finalText = normalize(polished)
-                estimatedUSD += polisher.estimatedUSD(inputText: normalized, outputText: finalText)
+                do {
+                    let polished = try await polisher.polishJapaneseText(
+                        normalized,
+                        tone: settings.polishTone,
+                        apiKey: key
+                    )
+                    finalText = normalize(polished)
+                    estimatedUSD += polisher.estimatedUSD(inputText: normalized, outputText: finalText)
+                } catch {
+                    finalText = normalized
+                    warningMessage = "AI整形がタイムアウトしたため、文字起こし結果をそのまま使いました。"
+                }
             }
 
             lastTranscript = finalText
             status = .idle
-            errorMessage = ""
+            errorMessage = warningMessage ?? ""
             audioLevels = Array(repeating: 0.08, count: 14)
             activeCaptureMode = nil
 
