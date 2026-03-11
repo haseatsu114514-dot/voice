@@ -1054,12 +1054,15 @@ enum WindowConfigurator {
     static func apply(windowSize: CGSize, alwaysOnTop: Bool) {
         guard let window = NSApplication.shared.windows.first(where: { $0.isVisible }) else { return }
         window.ignoresMouseEvents = false
-        window.level = alwaysOnTop ? .floating : .normal
+        window.level = .normal
         window.titleVisibility = .visible
         window.titlebarAppearsTransparent = false
         window.isMovableByWindowBackground = false
         window.minSize = windowSize
         window.maxSize = CGSize(width: windowSize.width + 80, height: 900)
+        window.collectionBehavior = []
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
 
         if lastAppliedSize != windowSize {
             window.setContentSize(windowSize)
