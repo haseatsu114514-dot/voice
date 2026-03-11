@@ -24,6 +24,7 @@ final class VoiceInputAppController: ObservableObject {
     private let openAI = OpenAITranscriptionService()
     private let polisher = OpenAITextPolishService()
     private let offline = OfflineTranscriptionService()
+    private let soundCuePlayer = SoundCuePlayer.shared
     private var cancellables: Set<AnyCancellable> = []
 
     init(settings: SettingsStore = SettingsStore()) {
@@ -219,6 +220,9 @@ final class VoiceInputAppController: ObservableObject {
                 errorMessage = ""
                 recordingElapsedSeconds = 0
                 audioLevels = Array(repeating: 0.08, count: 14)
+                if settings.soundCuesEnabled {
+                    soundCuePlayer.playStartCue()
+                }
             } catch {
                 status = .error(error.localizedDescription)
                 errorMessage = error.localizedDescription
@@ -236,6 +240,9 @@ final class VoiceInputAppController: ObservableObject {
         let captureMode = activeCaptureMode ?? settings.defaultCaptureMode
         status = .processing
         audioLevels = Array(repeating: 0.12, count: 14)
+        if settings.soundCuesEnabled {
+            soundCuePlayer.playStopCue()
+        }
 
         Task {
             await transcribe(fileURL: result.url, duration: result.duration, trigger: trigger, captureMode: captureMode)

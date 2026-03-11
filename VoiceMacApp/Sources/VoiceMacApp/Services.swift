@@ -11,6 +11,7 @@ final class SettingsStore: ObservableObject {
     @Published var defaultCaptureMode: CaptureMode { didSet { save() } }
     @Published var interfaceMode: InterfaceMode { didSet { save() } }
     @Published var autoPaste: Bool { didSet { save() } }
+    @Published var soundCuesEnabled: Bool { didSet { save() } }
     @Published var autoStopEnabled: Bool { didSet { save() } }
     @Published var autoStopSeconds: Double { didSet { save() } }
     @Published var fillerRemoval: Bool { didSet { save() } }
@@ -48,6 +49,7 @@ final class SettingsStore: ObservableObject {
         }
 
         self.autoPaste = defaults.object(forKey: "settings.autoPaste") as? Bool ?? true
+        self.soundCuesEnabled = defaults.object(forKey: "settings.soundCuesEnabled") as? Bool ?? true
         self.autoStopEnabled = defaults.object(forKey: "settings.autoStopEnabled") as? Bool ?? true
         self.autoStopSeconds = defaults.object(forKey: "settings.autoStopSeconds") as? Double ?? 1.2
         self.fillerRemoval = defaults.object(forKey: "settings.fillerRemoval") as? Bool ?? true
@@ -59,6 +61,7 @@ final class SettingsStore: ObservableObject {
         defaults.set(defaultCaptureMode.rawValue, forKey: "settings.defaultCaptureMode")
         defaults.set(interfaceMode.rawValue, forKey: "settings.interfaceMode")
         defaults.set(autoPaste, forKey: "settings.autoPaste")
+        defaults.set(soundCuesEnabled, forKey: "settings.soundCuesEnabled")
         defaults.set(autoStopEnabled, forKey: "settings.autoStopEnabled")
         defaults.set(autoStopSeconds, forKey: "settings.autoStopSeconds")
         defaults.set(fillerRemoval, forKey: "settings.fillerRemoval")
@@ -263,7 +266,7 @@ final class RecorderService: NSObject, AVAudioRecorderDelegate {
         onLevelUpdate?(0.04, 0)
 
         meterTimer?.invalidate()
-        meterTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+        meterTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
             self?.checkMeters()
         }
     }
@@ -285,7 +288,7 @@ final class RecorderService: NSObject, AVAudioRecorderDelegate {
         recorder.updateMeters()
         let power = recorder.averagePower(forChannel: 0)
         let now = Date()
-        let normalizedPower = max(0.02, min(1.0, (power + 55) / 55))
+        let normalizedPower = max(0.06, min(1.0, (power + 52) / 52))
         let elapsed = now.timeIntervalSince(recordStart ?? now)
         onLevelUpdate?(normalizedPower, elapsed)
         if power > -45 {
@@ -441,6 +444,87 @@ struct OpenAITextPolishService {
         let inputTokens = Double(inputText.count) * 1.2
         let outputTokens = Double(outputText.count) * 1.2
         return (inputTokens * 0.40 / 1_000_000) + (outputTokens * 1.60 / 1_000_000)
+    }
+}
+
+final class SoundCuePlayer: NSObject, AVAudioPlayerDelegate {
+    static let shared = SoundCuePlayer()
+
+    private var activePlayers: [AVAudioPlayer] = []
+
+    func playStartCue() {
+        playCue(frequencies: [880, 1174], segmentDuration: 0.045)
+    }
+
+    func playStopCue() {
+        playCue(frequencies: [988, 740], segmentDuration: 0.05)
+    }
+
+    private func playCue(frequencies: [Double], segmentDuration: Double) {
+        guard let data = makeToneWAVData(frequencies: frequencies, segmentDuration: segmentDuration) else {
+            NSSound.beep()
+            return
+        }
+
+        do {
+            let player = try AVAudioPlayer(data: data)
+            player.delegate = self
+            player.prepareToPlay()
+            activePlayers.append(player)
+            player.play()
+        } catch {
+            NSSound.beep()
+        }
+    }
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        activePlayers.removeAll { $0 === player }
+    }
+
+    private func makeToneWAVData(frequencies: [Double], segmentDuration: Double) -> Data? {
+        let sampleRate = 44_100
+        let amplitude = 0.24
+        let samplesPerSegment = Int(Double(sampleRate) * segmentDuration)
+        var pcm = Data(capacity: frequencies.count * samplesPerSegment * 2)
+
+        for frequency in frequencies {
+            for sampleIndex in 0..<samplesPerSegment {
+                let progress = Double(sampleIndex) / Double(samplesPerSegment)
+                let envelope = min(progress / 0.08, 1.0) * min((1.0 - progress) / 0.12, 1.0)
+                let theta = 2.0 * Double.pi * frequency * Double(sampleIndex) / Double(sampleRate)
+                let value = sin(theta) * amplitude * max(0, envelope)
+                var int16 = Int16(max(-1, min(1, value)) * Double(Int16.max))
+                pcm.append(Data(bytes: &int16, count: MemoryLayout<Int16>.size))
+            }
+        }
+
+        let byteRate = sampleRate * 2
+        let blockAlign: UInt16 = 2
+        let bitsPerSample: UInt16 = 16
+        let dataSize = UInt32(pcm.count)
+        let riffSize = UInt32(36) + dataSize
+
+        var wav = Data()
+        wav.append("RIFF".data(using: .ascii)!)
+        wav.append(littleEndianBytes(riffSize))
+        wav.append("WAVE".data(using: .ascii)!)
+        wav.append("fmt ".data(using: .ascii)!)
+        wav.append(littleEndianBytes(UInt32(16)))
+        wav.append(littleEndianBytes(UInt16(1)))
+        wav.append(littleEndianBytes(UInt16(1)))
+        wav.append(littleEndianBytes(UInt32(sampleRate)))
+        wav.append(littleEndianBytes(UInt32(byteRate)))
+        wav.append(littleEndianBytes(blockAlign))
+        wav.append(littleEndianBytes(bitsPerSample))
+        wav.append("data".data(using: .ascii)!)
+        wav.append(littleEndianBytes(dataSize))
+        wav.append(pcm)
+        return wav
+    }
+
+    private func littleEndianBytes<T: FixedWidthInteger>(_ value: T) -> Data {
+        var littleEndianValue = value.littleEndian
+        return Data(bytes: &littleEndianValue, count: MemoryLayout<T>.size)
     }
 }
 

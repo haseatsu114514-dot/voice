@@ -398,19 +398,27 @@ struct WaveformView: View {
     let isActive: Bool
 
     var body: some View {
-        HStack(alignment: .center, spacing: 4) {
-            ForEach(Array(levels.enumerated()), id: \.offset) { index, level in
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [tint.opacity(isActive ? 0.95 : 0.45), tint.opacity(isActive ? 0.55 : 0.25)],
-                            startPoint: .top,
-                            endPoint: .bottom
+        ZStack {
+            RoundedRectangle(cornerRadius: 14)
+                .fill(tint.opacity(isActive ? 0.10 : 0.05))
+
+            HStack(alignment: .center, spacing: 4) {
+                ForEach(Array(levels.enumerated()), id: \.offset) { _, level in
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [tint.opacity(isActive ? 0.98 : 0.55), tint.opacity(isActive ? 0.62 : 0.30)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
                         )
-                    )
-                    .frame(width: 6, height: max(8, CGFloat(level) * 42))
-                    .animation(.easeOut(duration: 0.16), value: level)
+                        .frame(width: 7, height: max(10, CGFloat(level) * 52))
+                        .shadow(color: tint.opacity(isActive ? 0.28 : 0.10), radius: 5, y: 1)
+                        .animation(.easeOut(duration: 0.1), value: level)
+                }
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
         }
         .frame(maxWidth: .infinity, alignment: .center)
     }
@@ -551,6 +559,7 @@ struct SettingsView: View {
             GroupBox("動作") {
                 VStack(alignment: .leading, spacing: 10) {
                     Toggle("文字起こし後に自動で貼り付ける", isOn: $controller.settings.autoPaste)
+                    Toggle("開始音と終了音を鳴らす", isOn: $controller.settings.soundCuesEnabled)
                     Toggle("フィラーを自動で減らす", isOn: $controller.settings.fillerRemoval)
                     Toggle("無音で自動停止する", isOn: $controller.settings.autoStopEnabled)
                     HStack {

@@ -243,12 +243,12 @@ struct Shortcut: Codable, Equatable, Hashable {
     var displayString: String {
         var parts: [String] = []
         let flags = modifierFlags
-        if flags.contains(.command) { parts.append("Cmd") }
-        if flags.contains(.option) { parts.append("Option") }
-        if flags.contains(.control) { parts.append("Ctrl") }
-        if flags.contains(.shift) { parts.append("Shift") }
+        if flags.contains(.command) { parts.append("⌘") }
+        if flags.contains(.option) { parts.append("⌥") }
+        if flags.contains(.control) { parts.append("⌃") }
+        if flags.contains(.shift) { parts.append("⇧") }
         parts.append(Self.keyName(for: keyCode))
-        return parts.joined(separator: "+")
+        return parts.joined()
     }
 
     private static func keyName(for keyCode: UInt32) -> String {
@@ -288,7 +288,7 @@ struct Shortcut: Codable, Equatable, Hashable {
         case 33: return "["
         case 34: return "I"
         case 35: return "P"
-        case 36: return "Return"
+        case 36: return "return"
         case 37: return "L"
         case 38: return "J"
         case 39: return "'"
@@ -300,8 +300,8 @@ struct Shortcut: Codable, Equatable, Hashable {
         case 45: return "N"
         case 46: return "M"
         case 47: return "."
-        case 49: return "Space"
-        case 51: return "Delete"
+        case 49: return "space"
+        case 51: return "delete"
         case 53: return "Esc"
         case 122: return "F1"
         case 120: return "F2"

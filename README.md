@@ -77,6 +77,7 @@ python main.py --config config.toml --mic-button
 - 小さいマイクUI
 - `そのまま` と `AIで整える` の2種類の録音ボタン
 - 録音中の波形表示と状態表示
+- 録音開始音 / 終了音
 - 日本語メインのUI
 - 標準表示 / 小型表示の切り替え
 - OpenAI APIキーの保存と接続テスト
