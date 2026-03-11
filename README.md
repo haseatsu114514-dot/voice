@@ -23,6 +23,10 @@ macなら、まずはこれで十分です。
 
 迷ったら、まず [BEGINNER_MANUAL_JA.md](/Users/hasegawaatsuki/Documents/New%20project/voice/BEGINNER_MANUAL_JA.md) を見てください。
 
+macアプリ版を使う場合:
+- アプリ本体: `/Users/hasegawaatsuki/Applications/Voice Input.app`
+- デスクトップショートカット: `/Users/hasegawaatsuki/Desktop/Voice Input.app`
+
 1. [start_mic_button.command](/Users/hasegawaatsuki/Documents/New%20project/voice/start_mic_button.command) をダブルクリック
 2. 小さい `MIC` ボタンが出る
 3. そのボタンを1回押して話す
@@ -60,6 +64,23 @@ python main.py --config config.toml --mic-button
 3. 文字起こし結果が貼り付けされる
 
 `config.toml` が無い場合は初回起動時に自動作成されます。
+
+## macアプリ版
+
+今回、SwiftUI ベースの mac ネイティブアプリも追加しました。
+
+- ソース: `/Users/hasegawaatsuki/Documents/New project/voice/VoiceMacApp`
+- ビルドスクリプト: [build_mac_app.command](/Users/hasegawaatsuki/Documents/New%20project/voice/build_mac_app.command)
+- オフライン補助: [offline_transcribe.py](/Users/hasegawaatsuki/Documents/New%20project/voice/offline_transcribe.py)
+
+アプリでできること:
+- 小さいマイクUI
+- OpenAI APIキーの保存と接続テスト
+- 録音ショートカット変更
+- モード切替
+  Offline / Balanced / Best
+- 履歴保存
+- Paste Last / Copy Last
 
 ## 重要: macの権限
 
@@ -158,6 +179,9 @@ GUIで変更できる項目:
 ## ファイル構成
 
 - `main.py`: 本体コード
+- `VoiceMacApp`: macアプリ本体
+- [build_mac_app.command](/Users/hasegawaatsuki/Documents/New%20project/voice/build_mac_app.command): macアプリをビルドして配置
+- [offline_transcribe.py](/Users/hasegawaatsuki/Documents/New%20project/voice/offline_transcribe.py): Offlineモード補助
 - `config.example.toml`: 設定サンプル
 - `common_replacements_ja.toml`: 共通の言い間違い辞書
 - `user_replacements_ja.toml`: 学習で自動生成される辞書

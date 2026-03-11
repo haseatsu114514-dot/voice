@@ -5,3 +5,4 @@ __pycache__/
 config.toml
 user_replacements_ja.toml
 transcript_history.jsonl
+VoiceMacApp/.build/

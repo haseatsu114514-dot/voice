@@ -37,6 +37,17 @@
 
 ### 手順
 
+いまは 2 通りあります。
+
+### A. 一番おすすめ: macアプリ版
+
+1. デスクトップの `Voice Input.app` をダブルクリック
+2. アプリが開いたら `MIC` を押す
+3. 初回だけマイク権限とアクセシビリティ権限を許可する
+4. 設定を変えたいときはアプリ内の `Settings` を押す
+
+### B. これまでのPython版
+
 1. Finderでこのフォルダを開く  
    `/Users/hasegawaatsuki/Documents/New project/voice`
 
