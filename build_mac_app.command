@@ -60,7 +60,7 @@ codesign \
   "${APP_DIR}" >/dev/null 2>&1 || true
 
 rm -rf "${DESKTOP_APP_DIR}"
-ditto "${APP_DIR}" "${DESKTOP_APP_DIR}"
+ln -s "${APP_DIR}" "${DESKTOP_APP_DIR}"
 
 echo "Built app:"
 echo "${APP_DIR}"

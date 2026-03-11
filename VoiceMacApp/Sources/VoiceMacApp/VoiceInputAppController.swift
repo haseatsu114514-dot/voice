@@ -40,6 +40,12 @@ final class VoiceInputAppController: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
     private var lastExternalApplication: NSRunningApplication?
 
+    private enum PasteDeliveryResult {
+        case success
+        case noEditableTarget(String)
+        case failed(String)
+    }
+
     init(settings: SettingsStore = SettingsStore()) {
         self.settings = settings
         self.settings.defaultCaptureMode = .aiPolish
@@ -551,10 +557,16 @@ final class VoiceInputAppController: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
             guard let self else { return }
 
-            if let targetIssue = self.invalidPasteTargetMessage(for: targetApplication) {
-                self.status = .error("貼り付け先に入力欄がありません。")
-                self.errorMessage = targetIssue
+            switch self.insertTextDirectly(text, into: targetApplication) {
+            case .success:
+                self.errorMessage = ""
                 return
+            case .noEditableTarget(let message):
+                self.status = .error("貼り付け先に入力欄がありません。")
+                self.errorMessage = message
+                return
+            case .failed:
+                break
             }
 
             if NSWorkspace.shared.frontmostApplication?.processIdentifier != targetApplication.processIdentifier {
@@ -569,6 +581,33 @@ final class VoiceInputAppController: ObservableObject {
 
             self.errorMessage = ""
         }
+    }
+
+    private func insertTextDirectly(_ text: String, into application: NSRunningApplication) -> PasteDeliveryResult {
+        let appElement = AXUIElementCreateApplication(application.processIdentifier)
+        guard let focusedElement = focusedElement(in: appElement) else {
+            return .noEditableTarget(
+                "貼り付け先に入力欄がありません。原因: 入力欄が選ばれていません。貼り付けたい欄を一度クリックしてから使ってください。"
+            )
+        }
+
+        if setSelectedText(text, on: focusedElement) {
+            return .success
+        }
+
+        if replaceTextViaValueAttribute(text, on: focusedElement) {
+            return .success
+        }
+
+        let role = stringAttribute(kAXRoleAttribute as CFString, from: focusedElement) ?? ""
+        let editableRoles: Set<String> = ["AXTextField", "AXTextArea", "AXSearchField", "AXComboBox", "AXWebArea"]
+        if editableRoles.contains(role) {
+            return .failed("入力欄は見つかりましたが、直接入力に失敗しました。")
+        }
+
+        return .noEditableTarget(
+            "貼り付け先に入力欄がありません。原因: 今開いている場所は文字入力できない画面です。メモやチャット欄を選んでから使ってください。"
+        )
     }
 
     private func postCommandV(to pid: pid_t? = nil) -> Bool {
@@ -607,21 +646,44 @@ final class VoiceInputAppController: ObservableObject {
         return true
     }
 
-    private func invalidPasteTargetMessage(for application: NSRunningApplication) -> String? {
-        let appElement = AXUIElementCreateApplication(application.processIdentifier)
+    private func focusedElement(in applicationElement: AXUIElement) -> AXUIElement? {
         var focusedValue: CFTypeRef?
         let focusedResult = AXUIElementCopyAttributeValue(
-            appElement,
+            applicationElement,
             kAXFocusedUIElementAttribute as CFString,
             &focusedValue
         )
 
         guard focusedResult == .success,
-              let focusedElement = focusedValue else {
-            return "貼り付け先に入力欄がありません。原因: 今開いている画面では文字入力できません。メモやチャット欄を選んでから使ってください。"
+              let focusedElement = focusedValue,
+              CFGetTypeID(focusedElement) == AXUIElementGetTypeID() else {
+            return nil
         }
 
-        let element = focusedElement as! AXUIElement
+        return (focusedElement as! AXUIElement)
+    }
+
+    private func setSelectedText(_ text: String, on element: AXUIElement) -> Bool {
+        var isSettable = DarwinBoolean(false)
+        let settableResult = AXUIElementIsAttributeSettable(
+            element,
+            kAXSelectedTextAttribute as CFString,
+            &isSettable
+        )
+
+        guard settableResult == .success, isSettable.boolValue else {
+            return false
+        }
+
+        let result = AXUIElementSetAttributeValue(
+            element,
+            kAXSelectedTextAttribute as CFString,
+            text as CFTypeRef
+        )
+        return result == .success
+    }
+
+    private func replaceTextViaValueAttribute(_ text: String, on element: AXUIElement) -> Bool {
         var isValueSettable = DarwinBoolean(false)
         let valueResult = AXUIElementIsAttributeSettable(
             element,
@@ -629,17 +691,69 @@ final class VoiceInputAppController: ObservableObject {
             &isValueSettable
         )
 
-        if valueResult == .success && isValueSettable.boolValue {
+        guard valueResult == .success, isValueSettable.boolValue else {
+            return false
+        }
+
+        let currentValue = stringAttribute(kAXValueAttribute as CFString, from: element) ?? ""
+        let currentNSString = currentValue as NSString
+        let selectedRange = selectedTextRange(from: element) ?? NSRange(location: currentNSString.length, length: 0)
+        let safeLocation = min(max(0, selectedRange.location), currentNSString.length)
+        let safeLength = min(max(0, selectedRange.length), currentNSString.length - safeLocation)
+        let updatedValue = currentNSString.replacingCharacters(
+            in: NSRange(location: safeLocation, length: safeLength),
+            with: text
+        )
+
+        let setValueResult = AXUIElementSetAttributeValue(
+            element,
+            kAXValueAttribute as CFString,
+            updatedValue as CFTypeRef
+        )
+        guard setValueResult == .success else {
+            return false
+        }
+
+        let insertionPoint = safeLocation + (text as NSString).length
+        if let rangeValue = axRangeValue(location: insertionPoint, length: 0) {
+            _ = AXUIElementSetAttributeValue(
+                element,
+                kAXSelectedTextRangeAttribute as CFString,
+                rangeValue
+            )
+        }
+        return true
+    }
+
+    private func selectedTextRange(from element: AXUIElement) -> NSRange? {
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(
+            element,
+            kAXSelectedTextRangeAttribute as CFString,
+            &value
+        )
+        guard result == .success,
+              let rawValue = value,
+              CFGetTypeID(rawValue) == AXValueGetTypeID() else {
             return nil
         }
 
-        let allowedRoles: Set<String> = ["AXTextField", "AXTextArea", "AXSearchField", "AXComboBox"]
-        let role = stringAttribute(kAXRoleAttribute as CFString, from: element) ?? ""
-        if allowedRoles.contains(role) {
+        let axValue = rawValue as! AXValue
+        guard AXValueGetType(axValue) == .cfRange else {
             return nil
         }
 
-        return "貼り付け先に入力欄がありません。原因: 今開いている画面では文字入力できません。メモやチャット欄を選んでから使ってください。"
+        var range = CFRange()
+        guard AXValueGetValue(axValue, .cfRange, &range) else {
+            return nil
+        }
+
+        return NSRange(location: range.location, length: range.length)
+    }
+
+    private func axRangeValue(location: Int, length: Int) -> AXValue? {
+        var range = CFRange(location: location, length: length)
+        return AXValueCreate(.cfRange, &range)
     }
 
     private func stringAttribute(_ attribute: CFString, from element: AXUIElement) -> String? {

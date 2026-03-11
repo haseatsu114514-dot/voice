@@ -28,7 +28,7 @@ pkill -x "VoiceMacApp" || true
 sleep 1
 
 echo "最新版を起動しています..."
-open "${DESKTOP_APP_PATH}"
+open "${APP_PATH}"
 
 echo ""
 echo "更新が終わりました。"

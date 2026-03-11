@@ -240,6 +240,15 @@ struct CompactMicView: View {
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
 
+            Picker("AI文体", selection: $controller.settings.polishTone) {
+                ForEach(PolishTone.allCases) { tone in
+                    Text(tone.title).tag(tone)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .font(.system(size: 9, weight: .semibold))
+
             WaveformView(
                 levels: controller.audioLevels,
                 tint: controller.statusColor,
@@ -426,7 +435,7 @@ struct SetupGuidePanel: View {
                     .font(.system(size: 11))
                 Text("3. 「録音ショートカット」で好きなキーに変える")
                     .font(.system(size: 11))
-                Text("4. 戻って「通常」か「AIで整える」を押す")
+                Text("4. 戻って「AIで整える」を押す")
                     .font(.system(size: 11))
 
                 if !controller.hasSavedAPIKey {
