@@ -70,6 +70,7 @@ struct StandardMicView: View {
                                 title: controller.apiSetupStatusText,
                                 tint: controller.apiStatusTint
                             )
+                            CostChip(text: controller.monthlyCostJPYText)
                         }
                     }
 
@@ -138,13 +139,8 @@ struct StandardMicView: View {
                 if !controller.lastTranscript.isEmpty {
                     GlassPanel {
                         VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("直前の文字起こし")
-                                    .font(.system(size: 13, weight: .semibold))
-                                Spacer()
-                                SmallTextButton(title: "コピー", action: controller.copyLastTranscript)
-                                SmallTextButton(title: "貼る", action: controller.pasteLastTranscript)
-                            }
+                            Text("直前の文字起こし")
+                                .font(.system(size: 13, weight: .semibold))
 
                             Text(controller.lastTranscript)
                                 .font(.system(size: 12))
@@ -160,7 +156,7 @@ struct StandardMicView: View {
 
                 DisclosureGroup("補助メニュー", isExpanded: $showingUtilities) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(controller.monthlyStats.shortSummaryText)
+                        Text("\(controller.monthlyStats.shortSummaryText) / \(controller.monthlyCostJPYText)")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.secondary)
 
@@ -168,11 +164,6 @@ struct StandardMicView: View {
                             Text("この音声入力を使う前に、設定で APIキー を保存します。")
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(.orange)
-                        }
-
-                        HStack(spacing: 8) {
-                            UtilityButton(title: "前回を貼る", systemImage: "arrowshape.turn.up.right.fill", action: controller.pasteLastTranscript)
-                            UtilityButton(title: "前回をコピー", systemImage: "doc.on.doc.fill", action: controller.copyLastTranscript)
                         }
 
                         HStack(spacing: 8) {
@@ -234,6 +225,9 @@ struct CompactMicView: View {
                 Text(controller.apiSetupStatusText)
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(controller.apiStatusTint)
+                Text(controller.monthlyCostJPYText)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
                 Text(controller.monthlyStats.shortSummaryText)
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(.secondary)
@@ -247,10 +241,6 @@ struct CompactMicView: View {
             .multilineTextAlignment(.center)
 
             HStack(spacing: 8) {
-                SmallIconButton(systemImage: "arrowshape.turn.up.right.fill", action: controller.pasteLastTranscript)
-                    .help("前回を貼る")
-                SmallIconButton(systemImage: "doc.on.doc.fill", action: controller.copyLastTranscript)
-                    .help("前回をコピー")
                 SmallIconButton(systemImage: "folder.fill", action: controller.openHistory)
                     .help("履歴を開く")
             }
@@ -321,6 +311,19 @@ struct StatusBadge: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(Capsule().fill(tint.opacity(0.13)))
+    }
+}
+
+struct CostChip: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Color.black.opacity(0.06)))
     }
 }
 
@@ -528,18 +531,6 @@ struct UtilityButton: View {
             .padding(.vertical, 8)
         }
         .buttonStyle(.bordered)
-    }
-}
-
-struct SmallTextButton: View {
-    let title: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(title, action: action)
-            .font(.system(size: 11, weight: .semibold))
-            .buttonStyle(.borderless)
-            .foregroundStyle(.secondary)
     }
 }
 
@@ -914,6 +905,13 @@ struct WindowAccessor: NSViewRepresentable {
         window.minSize = windowSize
         window.maxSize = CGSize(width: windowSize.width + 80, height: 900)
 
+        if coordinator.lastAppliedWindowSize != windowSize {
+            window.setContentSize(windowSize)
+            coordinator.lastAppliedWindowSize = windowSize
+            coordinator.didApplyInitialSize = true
+            return
+        }
+
         if forceInitialSize && !coordinator.didApplyInitialSize {
             let shouldResetWideWindow = window.frame.size.width > windowSize.width + 80
             let shouldResetShortWindow = window.frame.size.width < windowSize.width || window.frame.size.height < windowSize.height
@@ -928,5 +926,6 @@ struct WindowAccessor: NSViewRepresentable {
 
     final class Coordinator {
         var didApplyInitialSize = false
+        var lastAppliedWindowSize: CGSize?
     }
 }

@@ -596,6 +596,81 @@ final class SystemAudioMuteService {
     }
 }
 
+struct UserFacingErrorTranslator {
+    static func message(for error: Error) -> String {
+        let nsError = error as NSError
+        let rawMessage = nsError.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawMessage.isEmpty else {
+            return "不明なエラーです。原因: 詳細を取得できませんでした。"
+        }
+
+        if containsJapanese(rawMessage) {
+            return rawMessage
+        }
+
+        if nsError.domain == NSURLErrorDomain {
+            return networkMessage(for: nsError)
+        }
+
+        let lowered = rawMessage.lowercased()
+
+        if lowered.contains("invalid_api_key") || lowered.contains("incorrect api key") || lowered.contains("unauthorized") || nsError.code == 401 {
+            return "OpenAI APIキーが正しくありません。原因: APIキーの入力ミス、無効化、または別アカウントのキーです。"
+        }
+
+        if lowered.contains("insufficient_quota") || lowered.contains("quota") || lowered.contains("billing") {
+            return "OpenAI APIの利用上限に達しました。原因: クレジット不足、無料枠の終了、または使用量上限です。"
+        }
+
+        if lowered.contains("rate limit") || lowered.contains("too many requests") {
+            return "OpenAI APIへのアクセスが多すぎます。原因: 短時間にリクエストが集中しています。少し待ってから再試行してください。"
+        }
+
+        if lowered.contains("model") && lowered.contains("not found") {
+            return "AIモデルが見つかりません。原因: モデル名の変更、利用権限不足、または一時的な提供停止です。"
+        }
+
+        if lowered.contains("timeout") || lowered.contains("timed out") {
+            return "通信がタイムアウトしました。原因: 回線が遅いか、OpenAI側の応答が遅れています。"
+        }
+
+        if lowered.contains("ssl") || lowered.contains("secure connection") || lowered.contains("certificate") {
+            return "安全な通信に失敗しました。原因: ネットワーク設定または証明書の問題です。"
+        }
+
+        if lowered.contains("json") || lowered.contains("unexpected response") || lowered.contains("invalid response") {
+            return "AIサービスの応答を正しく読めませんでした。原因: サービス側から想定外の形式で返ってきました。"
+        }
+
+        if lowered.contains("offline") || lowered.contains("network connection was lost") || lowered.contains("could not connect") {
+            return "インターネットに接続できませんでした。原因: Wi-Fi切断、回線不調、またはOpenAI側への接続失敗です。"
+        }
+
+        return "エラーが発生しました。原因: サービス側で想定外の応答が返りました。"
+    }
+
+    private static func networkMessage(for error: NSError) -> String {
+        switch error.code {
+        case NSURLErrorNotConnectedToInternet, NSURLErrorInternationalRoamingOff, NSURLErrorDataNotAllowed:
+            return "インターネットに接続できません。原因: Wi-Fiやモバイル回線が切れています。"
+        case NSURLErrorTimedOut:
+            return "通信がタイムアウトしました。原因: 回線が遅いか、OpenAI側の応答が遅れています。"
+        case NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost, NSURLErrorDNSLookupFailed:
+            return "接続先サーバーが見つかりません。原因: DNSやネットワーク設定の問題です。"
+        case NSURLErrorSecureConnectionFailed, NSURLErrorServerCertificateHasBadDate, NSURLErrorServerCertificateUntrusted:
+            return "安全な通信に失敗しました。原因: 証明書またはネットワークの問題です。"
+        case NSURLErrorNetworkConnectionLost:
+            return "通信が途中で切れました。原因: Wi-Fiや回線が不安定です。"
+        default:
+            return "通信エラーが発生しました。原因: ネットワークまたはOpenAI側の一時的な問題です。"
+        }
+    }
+
+    private static func containsJapanese(_ text: String) -> Bool {
+        text.range(of: "[ぁ-んァ-ン一-龥]", options: .regularExpression) != nil
+    }
+}
+
 struct OfflineTranscriptionService {
     private struct OfflineResponse: Decodable {
         let text: String

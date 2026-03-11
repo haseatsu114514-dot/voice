@@ -106,11 +106,19 @@ final class VoiceInputAppController: ObservableObject {
             return "今月はまだ使用していません"
         }
         return String(
-            format: "今月 %.1f分 / %d回 / 約$%.2f",
+            format: "今月 %.1f分 / %d回 / 約%d円",
             monthlyStats.totalMinutes,
             monthlyStats.totalSessions,
-            monthlyStats.estimatedUSD
+            estimatedMonthlyJPY
         )
+    }
+
+    var monthlyCostJPYText: String {
+        "今月 約\(estimatedMonthlyJPY)円"
+    }
+
+    var estimatedMonthlyJPY: Int {
+        Int((monthlyStats.estimatedUSD * 160).rounded())
     }
 
     var currentShortcutText: String {
@@ -218,7 +226,7 @@ final class VoiceInputAppController: ObservableObject {
             UsageMetric(title: "録音時間", value: monthlyStats.durationText),
             UsageMetric(title: "成功回数", value: "\(monthlyStats.successfulSessions)回"),
             UsageMetric(title: "文字数", value: "\(monthlyStats.totalCharacters)字"),
-            UsageMetric(title: "概算費用", value: String(format: "$%.2f", monthlyStats.estimatedUSD))
+            UsageMetric(title: "概算費用", value: "\(estimatedMonthlyJPY)円")
         ]
     }
 
@@ -252,8 +260,9 @@ final class VoiceInputAppController: ObservableObject {
             apiConnectionState = trimmedKey.isEmpty ? .missing : .saved
             apiConnectionMessage = ""
         } catch {
-            apiConnectionState = .failed(error.localizedDescription)
-            apiConnectionMessage = error.localizedDescription
+            let localizedError = localized(error)
+            apiConnectionState = .failed(localizedError)
+            apiConnectionMessage = localizedError
         }
     }
 
@@ -273,8 +282,9 @@ final class VoiceInputAppController: ObservableObject {
                 apiConnectionState = .verified
                 apiConnectionMessage = ""
             } catch {
-                apiConnectionState = .failed(error.localizedDescription)
-                apiConnectionMessage = error.localizedDescription
+                let localizedError = localized(error)
+                apiConnectionState = .failed(localizedError)
+                apiConnectionMessage = localizedError
             }
         }
     }
@@ -331,15 +341,16 @@ final class VoiceInputAppController: ObservableObject {
                     do {
                         try systemAudioMuteService.muteSystemAudioForRecording()
                     } catch {
-                        errorMessage = error.localizedDescription
+                        errorMessage = localized(error)
                     }
                 }
                 if settings.soundCuesEnabled {
                     soundCuePlayer.playStartCue()
                 }
             } catch {
-                status = .error(error.localizedDescription)
-                errorMessage = error.localizedDescription
+                let localizedError = localized(error)
+                status = .error(localizedError)
+                errorMessage = localizedError
                 activeCaptureMode = nil
                 systemAudioMuteService.restoreSystemAudioAfterRecording()
             }
@@ -415,8 +426,9 @@ final class VoiceInputAppController: ObservableObject {
                 paste(text: finalText)
             }
         } catch {
-            status = .error(error.localizedDescription)
-            errorMessage = error.localizedDescription
+            let localizedError = localized(error)
+            status = .error(localizedError)
+            errorMessage = localizedError
             audioLevels = Array(repeating: 0.08, count: 14)
             activeCaptureMode = nil
             try? historyStore.append(
@@ -428,7 +440,7 @@ final class VoiceInputAppController: ObservableObject {
                     durationSeconds: duration,
                     text: lastTranscript,
                     success: false,
-                    errorMessage: error.localizedDescription,
+                    errorMessage: localizedError,
                     estimatedUSD: nil
                 )
             )
@@ -535,6 +547,10 @@ final class VoiceInputAppController: ObservableObject {
             return false
         }
         return true
+    }
+
+    private func localized(_ error: Error) -> String {
+        UserFacingErrorTranslator.message(for: error)
     }
 }
 
