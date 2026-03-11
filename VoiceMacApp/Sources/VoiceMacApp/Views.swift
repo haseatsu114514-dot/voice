@@ -46,7 +46,7 @@ struct StandardMicView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("日本語音声入力")
                                 .font(.system(size: 20, weight: .bold))
-                            Text("録音して、そのまま貼るかAIで整えます")
+                            Text("録音して、AIで読みやすく整えて貼り付けます")
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(.secondary)
                         }
@@ -81,15 +81,15 @@ struct StandardMicView: View {
                     .help("小型モードに切り替え")
                 }
 
-                HStack(spacing: 10) {
-                    ForEach(CaptureMode.allCases) { captureMode in
-                        CaptureModeButton(
-                            controller: controller,
-                            captureMode: captureMode,
-                            compact: false
-                        )
-                    }
-                }
+                CaptureModeButton(
+                    controller: controller,
+                    captureMode: .aiPolish,
+                    compact: false
+                )
+
+                Text("このボタンか録音キーで、AI整形の音声入力を開始できます")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
 
                 GlassPanel {
                     VStack(alignment: .leading, spacing: 10) {
@@ -161,7 +161,7 @@ struct StandardMicView: View {
                             .foregroundStyle(.secondary)
 
                         if !controller.hasSavedAPIKey {
-                            Text("AIで整えるを使う前に、設定で APIキー を保存します。")
+                            Text("この音声入力を使う前に、設定で APIキー を保存します。")
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(.orange)
                         }
@@ -210,15 +210,11 @@ struct CompactMicView: View {
                 .help("標準サイズに戻す")
             }
 
-            HStack(spacing: 8) {
-                ForEach(CaptureMode.allCases) { captureMode in
-                    CaptureModeButton(
-                        controller: controller,
-                        captureMode: captureMode,
-                        compact: true
-                    )
-                }
-            }
+            CaptureModeButton(
+                controller: controller,
+                captureMode: .aiPolish,
+                compact: true
+            )
 
             WaveformView(
                 levels: controller.audioLevels,
@@ -333,7 +329,7 @@ struct SetupGuidePanel: View {
                     .font(.system(size: 11))
                 Text("3. 「録音ショートカット」で好きなキーに変える")
                     .font(.system(size: 11))
-                Text("4. 戻って「そのまま」か「AIで整える」を押す")
+                Text("4. 戻って「通常」か「AIで整える」を押す")
                     .font(.system(size: 11))
 
                 if !controller.hasSavedAPIKey {
@@ -736,12 +732,9 @@ struct SettingsView: View {
 
                 GroupBox("よく使う設定") {
                     VStack(alignment: .leading, spacing: 10) {
-                        Picker("録音ボタン", selection: $controller.settings.defaultCaptureMode) {
-                            ForEach(CaptureMode.allCases) { captureMode in
-                                Text(captureMode.title).tag(captureMode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
+                        Text("録音キーでも AIで整える が起動します。")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
                         Picker("表示サイズ", selection: $controller.settings.interfaceMode) {
                             ForEach(InterfaceMode.allCases) { mode in
                                 Text(mode.title).tag(mode)
@@ -771,6 +764,7 @@ struct SettingsView: View {
 
                         GroupBox("録音の細かい動作") {
                             VStack(alignment: .leading, spacing: 10) {
+                                Toggle("録音中はMacの再生音をミュートする", isOn: $controller.settings.muteSystemAudioWhileRecording)
                                 Toggle("開始音と終了音を鳴らす", isOn: $controller.settings.soundCuesEnabled)
                                 Toggle("フィラーを自動で減らす", isOn: $controller.settings.fillerRemoval)
                                 Toggle("無音で自動停止する", isOn: $controller.settings.autoStopEnabled)
@@ -861,29 +855,46 @@ struct WindowAccessor: NSViewRepresentable {
     let alwaysOnTop: Bool
     let windowSize: CGSize
 
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
-            configureWindow(for: view)
+            configureWindow(for: view, coordinator: context.coordinator, forceInitialSize: true)
         }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
         DispatchQueue.main.async {
-            configureWindow(for: nsView)
+            configureWindow(for: nsView, coordinator: context.coordinator, forceInitialSize: false)
         }
     }
 
-    private func configureWindow(for view: NSView) {
+    private func configureWindow(for view: NSView, coordinator: Coordinator, forceInitialSize: Bool) {
         guard let window = view.window else { return }
         window.level = alwaysOnTop ? .floating : .normal
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
         window.minSize = windowSize
-        if window.frame.size.width < windowSize.width || window.frame.size.height < windowSize.height {
+        window.maxSize = CGSize(width: windowSize.width + 80, height: 900)
+
+        if forceInitialSize && !coordinator.didApplyInitialSize {
+            let shouldResetWideWindow = window.frame.size.width > windowSize.width + 80
+            let shouldResetShortWindow = window.frame.size.width < windowSize.width || window.frame.size.height < windowSize.height
+            if shouldResetWideWindow || shouldResetShortWindow {
+                window.setContentSize(windowSize)
+            }
+            coordinator.didApplyInitialSize = true
+        } else if window.frame.size.width < windowSize.width || window.frame.size.height < windowSize.height {
             window.setContentSize(windowSize)
         }
+    }
+
+    final class Coordinator {
+        var didApplyInitialSize = false
     }
 }

@@ -34,10 +34,12 @@ final class VoiceInputAppController: ObservableObject {
     private let polisher = OpenAITextPolishService()
     private let offline = OfflineTranscriptionService()
     private let soundCuePlayer = SoundCuePlayer.shared
+    private let systemAudioMuteService = SystemAudioMuteService()
     private var cancellables: Set<AnyCancellable> = []
 
     init(settings: SettingsStore = SettingsStore()) {
         self.settings = settings
+        self.settings.defaultCaptureMode = .aiPolish
         self.apiKeyDraft = keychain.load()
         self.apiConnectionState = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .missing : .saved
         self.monthlyStats = historyStore.currentMonthStats()
@@ -98,7 +100,7 @@ final class VoiceInputAppController: ObservableObject {
     }
 
     var currentShortcutText: String {
-        "録音キー: \(settings.recordShortcut.displayString) / \(settings.defaultCaptureMode.title)"
+        "録音キー: \(settings.recordShortcut.displayString)"
     }
 
     var hasSavedAPIKey: Bool {
@@ -171,7 +173,7 @@ final class VoiceInputAppController: ObservableObject {
     }
 
     var selectedCaptureMode: CaptureMode {
-        activeCaptureMode ?? settings.defaultCaptureMode
+        activeCaptureMode ?? .aiPolish
     }
 
     var statusDetailText: String {
@@ -182,12 +184,12 @@ final class VoiceInputAppController: ObservableObject {
             if selectedCaptureMode == .aiPolish {
                 return "録音後にAIで読みやすく整えます"
             }
-            return "AIを使わず、そのまま高速に文字へ変換します"
+            return "AIを使わず、通常入力として高速に文字へ変換します"
         case .processing:
             if selectedCaptureMode == .aiPolish {
                 return "文字起こしとAI整形を進めています"
             }
-            return "そのままの文章として文字起こししています"
+            return "通常入力として文字起こししています"
         case .error(let message):
             return message
         }
@@ -207,8 +209,8 @@ final class VoiceInputAppController: ObservableObject {
             stopRecording(trigger: "manual")
             return
         }
-        guard ensureCaptureModeIsReady(settings.defaultCaptureMode) else { return }
-        startRecording(captureMode: settings.defaultCaptureMode)
+        guard ensureCaptureModeIsReady(.aiPolish) else { return }
+        startRecording(captureMode: .aiPolish)
     }
 
     func handleCaptureButton(_ captureMode: CaptureMode) {
@@ -283,7 +285,7 @@ final class VoiceInputAppController: ObservableObject {
     }
 
     private func startRecording(captureMode: CaptureMode) {
-        settings.defaultCaptureMode = captureMode
+        settings.defaultCaptureMode = .aiPolish
         activeCaptureMode = captureMode
 
         Task {
@@ -304,6 +306,9 @@ final class VoiceInputAppController: ObservableObject {
                 errorMessage = ""
                 recordingElapsedSeconds = 0
                 audioLevels = Array(repeating: 0.08, count: 14)
+                if settings.muteSystemAudioWhileRecording {
+                    systemAudioMuteService.muteSystemAudioForRecording()
+                }
                 if settings.soundCuesEnabled {
                     soundCuePlayer.playStartCue()
                 }
@@ -311,6 +316,7 @@ final class VoiceInputAppController: ObservableObject {
                 status = .error(error.localizedDescription)
                 errorMessage = error.localizedDescription
                 activeCaptureMode = nil
+                systemAudioMuteService.restoreSystemAudioAfterRecording()
             }
         }
     }
@@ -324,6 +330,7 @@ final class VoiceInputAppController: ObservableObject {
         let captureMode = activeCaptureMode ?? settings.defaultCaptureMode
         status = .processing
         audioLevels = Array(repeating: 0.12, count: 14)
+        systemAudioMuteService.restoreSystemAudioAfterRecording()
         if settings.soundCuesEnabled {
             soundCuePlayer.playStopCue()
         }

@@ -16,6 +16,7 @@ final class SettingsStore: ObservableObject {
     @Published var autoStopSeconds: Double { didSet { save() } }
     @Published var fillerRemoval: Bool { didSet { save() } }
     @Published var alwaysOnTop: Bool { didSet { save() } }
+    @Published var muteSystemAudioWhileRecording: Bool { didSet { save() } }
 
     private let defaults = UserDefaults.standard
 
@@ -54,6 +55,7 @@ final class SettingsStore: ObservableObject {
         self.autoStopSeconds = defaults.object(forKey: "settings.autoStopSeconds") as? Double ?? 1.2
         self.fillerRemoval = defaults.object(forKey: "settings.fillerRemoval") as? Bool ?? true
         self.alwaysOnTop = defaults.object(forKey: "settings.alwaysOnTop") as? Bool ?? true
+        self.muteSystemAudioWhileRecording = defaults.object(forKey: "settings.muteSystemAudioWhileRecording") as? Bool ?? false
     }
 
     private func save() {
@@ -66,6 +68,7 @@ final class SettingsStore: ObservableObject {
         defaults.set(autoStopSeconds, forKey: "settings.autoStopSeconds")
         defaults.set(fillerRemoval, forKey: "settings.fillerRemoval")
         defaults.set(alwaysOnTop, forKey: "settings.alwaysOnTop")
+        defaults.set(muteSystemAudioWhileRecording, forKey: "settings.muteSystemAudioWhileRecording")
         if let encoded = try? JSONEncoder().encode(recordShortcut) {
             defaults.set(encoded, forKey: "settings.recordShortcut")
         }
@@ -525,6 +528,62 @@ final class SoundCuePlayer: NSObject, AVAudioPlayerDelegate {
     private func littleEndianBytes<T: FixedWidthInteger>(_ value: T) -> Data {
         var littleEndianValue = value.littleEndian
         return Data(bytes: &littleEndianValue, count: MemoryLayout<T>.size)
+    }
+}
+
+final class SystemAudioMuteService {
+    private var previousMutedState: Bool?
+
+    func muteSystemAudioForRecording() {
+        guard previousMutedState == nil else { return }
+        guard let currentMuted = readCurrentMutedState() else { return }
+        previousMutedState = currentMuted
+        guard !currentMuted else { return }
+        _ = runAppleScript("set volume output muted true")
+    }
+
+    func restoreSystemAudioAfterRecording() {
+        guard let previousMutedState else { return }
+        _ = runAppleScript("set volume output muted \(previousMutedState ? "true" : "false")")
+        self.previousMutedState = nil
+    }
+
+    private func readCurrentMutedState() -> Bool? {
+        guard let output = runAppleScript("output muted of (get volume settings)") else {
+            return nil
+        }
+        let normalized = output.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalized == "true" {
+            return true
+        }
+        if normalized == "false" {
+            return false
+        }
+        return nil
+    }
+
+    @discardableResult
+    private func runAppleScript(_ source: String) -> String? {
+        let process = Process()
+        let outputPipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", source]
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return nil
+        }
+
+        guard process.terminationStatus == 0 else {
+            return nil
+        }
+
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8)
     }
 }
 

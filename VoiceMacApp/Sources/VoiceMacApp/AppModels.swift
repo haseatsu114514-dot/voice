@@ -95,7 +95,7 @@ enum CaptureMode: String, CaseIterable, Identifiable, Codable {
     var title: String {
         switch self {
         case .fastRaw:
-            return "そのまま"
+            return "通常"
         case .aiPolish:
             return "AIで整える"
         }
